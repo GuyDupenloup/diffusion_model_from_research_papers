@@ -67,8 +67,12 @@ However, the information provided about the U-Net used to predict noise in the i
 ```
 B. Experimental details
 
-Our neural network architecture follows the backbone of PixelCNN++ [52], which is a U-Net [48] based on a Wide ResNet [72]. We replaced weight normalization [49] with group normalization [66] to make the implementation simpler. Our 32 x 32 models use four feature map resolutions (32 x 32 to 4 x 4), and our 256 x 256 models use six. All models have two convolutional residual blocks per resolution level and self-attention blocks at the 16 x 16 resolution between the convolutional blocks [6]. Diffusion time t is specified by adding the Transformer sinusoidal position embedding [60] into each residual block.
-
+Our neural network architecture follows the backbone of PixelCNN++ [52], which is a U-Net [48] 
+based on a Wide ResNet [72]. We replaced weight normalization [49] with group normalization [66]
+to make the implementation simpler. Our 32 x 32 models use four feature map resolutions 
+(32 x 32 to 4 x 4), and our 256 x 256 models use six. All models have two convolutional residual
+blocks per resolution level and self-attention blocks at the 16 x 16 resolution between the convolutional blocks [6]. Diffusion time t is specified by adding the Transformer sinusoidal 
+position embedding [60] into each residual block.
 ```
 
 This description is not sufficient to recreate the U-Net model that was used. Therefore, I had to reverse-engineer Ho's code on Github to obtain the missing implementation details.
@@ -77,22 +81,19 @@ This description is not sufficient to recreate the U-Net model that was used. Th
 
 In Ho's code on Github, the 32 x 32 U-Net is implemented as shown in Figure 1. This is the U-Net they used for the CIFAR-10 dataset. The model has parameters to configure it for the 256 x 256 images of the Celeb-A and LSun datasets.
 
-![](pictures/unet_cifar10.PNG)
-
+![](pictures/unet_cifar10.png)
 
 The model follows the "classic" U-Net architecture:
 
 - U-shaped architecture with a contracting path (encoder) and an expanding path (decoder)
 
-- Skip connections that concatenate features from the contracting path to the corresponding layers in the expanding path, allowing the network to combine low-level and high-level features.
+- Skip connections that concatenate features from the contracting path to the corresponding layers in the expanding path, allowing the network to combine low-level and high-level features
 
 Figure 2 shows the structure of the ResNet block as it is implemented in Ho's code.
 
-![](pictures/resnet_block.PNG)
+![](pictures/resnet_block.png)
 
-It was clearly inspired by Wide ResNet and PixelCNN++, as mentioned in the paper.
-
-It has the following key features:
+It was clearly inspired by Wide ResNet and PixelCNN++, as mentioned in the paper, and has the following key features:
 
 - The residual connection adds the block’s input to its output after the block’s transformations. If the block input and output shapes are the same, it is a straight connection. If they are different, a 1 x 1 convolution layer (Network-in-Network) layer is inserted in the connection to make the shapes compatible for addition.
 
@@ -109,7 +110,7 @@ It has the following key features:
 
 I did not have access to sufficient GPU resources to reproduce the CIFAR-10 results. Therefore, I used MNIST instead with the scaled-down U-Net model that is shown in Figure 3.
 
-![](pictures/unet_mnist.PNG)
+![](pictures/unet_mnist.png)
 
 I made the following changes to the U-Net in Ho's code:
 
@@ -126,15 +127,10 @@ The training setup the DDPM authors used is described in section *B. experimenta
 I used the same setup as they did for the CIFAR-10 dataset:
 
 - Data augmentation: random horizontal flips
-
 - Timesteps: 1000
-
 - Dropout rate: 0.1
-
 - Optimizer: Adam with learning rate 2e-4
-
 - Batch size: 128
-
 - EMA decay factor: 0.9999
 
 DDPM used a linear beta schedule. I used a cosine schedule instead, which was introduced later and proved a superior solution.
@@ -142,13 +138,13 @@ DDPM used a linear beta schedule. I used a cosine schedule instead, which was in
 
 ## 5. MNIST sampling
 
-Examples of samples obtained with the DDPM sampling method are shown in figure 4. The images are shown at different time steps of the sampling process. The quality of the generated images is quite good, and so is diversity in a batch of images.
+Examples of samples obtained with the DDPM sampling method are shown in Figure 4. The images are shown at different time steps of the sampling process. The quality of the generated images is quite good, and so is diversity in a batch of images.
 
-![](pictures/ddpm_samples.PNG)
+![](pictures/ddpm_samples.png)
 
 Examples of samples obtained with the DDIM sampling method are shown in Figure 5. Only 50 steps were used to obtain these images, using a completely deterministic method. Image quality and diversity are quite good.
 
-![](pictures/ddim_samples.PNG)
+![](pictures/ddim_samples.png)
 
 On Google Colab using a T4 GPU, generating a batch of 128 images takes 4:45min wall clock with the DDPM sampling method. It only takes 16sec with the DDIM method, which is 18x faster.
 

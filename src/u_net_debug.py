@@ -1,4 +1,4 @@
-# Copyright (c) 2025 Guy Dupenloup
+# Copyright (c) 2026 Guy Dupenloup
 # Licensed under the MIT License. See LICENSE file for details.
 
 import math
