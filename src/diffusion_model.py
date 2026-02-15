@@ -29,6 +29,7 @@ class DiffusionModel(tf.keras.models.Model):
         image_size = cfg['image_size']
         image_channels = cfg['image_channels']
         self.image_shape = (image_size, image_size, image_channels)
+        self.data_augment = self.model_config['data_augment']
 
         self.u_net = UNet(
             image_size=image_size,
@@ -103,7 +104,10 @@ class DiffusionModel(tf.keras.models.Model):
             'attn_resolutions': (16,),
             'dropout_rate': 0.0
         }
-        beta_defaults = {
+        data_augment_defaults = {
+            'random_flip': False
+        }
+        beta_schedule_defaults = {
             'timesteps': 1000,
             's': 0.008,
             'beta_min': 1e-5,
@@ -114,12 +118,14 @@ class DiffusionModel(tf.keras.models.Model):
         }
 
         u_net = diffusion_cfg.get('u_net', {})
+        data_augment = diffusion_cfg.get('data_augment', {})
         beta_schedule = diffusion_cfg.get('beta_schedule', {})
         ema = diffusion_cfg.get('ema', {})
         
         config = {
             'u_net': {**u_net_defaults, **(u_net or {})},
-            'beta_schedule': {**beta_defaults, **(beta_schedule or {})},
+            'data_augment': {**data_augment_defaults, **(data_augment or {})},
+            'beta_schedule': {**beta_schedule_defaults, **(beta_schedule or {})},
             'ema': {**ema_defaults, **(ema or {})}
         }
 
@@ -220,7 +226,8 @@ class DiffusionModel(tf.keras.models.Model):
         """
 
         # Randomly flip images horizontally
-        images = tf.image.random_flip_left_right(images)
+        if self.data_augment['random_flip']:
+            images = tf.image.random_flip_left_right(images)
 
         batch_size = tf.shape(images)[0]
         alpha_bar = tf.math.cumprod(1 - self.betas)

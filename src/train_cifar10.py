@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 from datetime import timedelta
 import tensorflow as tf
 from diffusion_model import DiffusionModel
-from utils import SaveCheckpoint
+from utils import print_trainable_variables, SaveCheckpoint
 
 
 def create_data_loader(x, batch_size):
@@ -34,9 +34,10 @@ def train_model(output_dir):
     
     # Create data loader for training set images
     train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-    train_ds = create_data_loader(x_train, batch_size=128)
+    train_ds = create_data_loader(x_train, batch_size=32)
 
     # Create diffusion model
+    print('>> Creating diffusion model')
     model = DiffusionModel({
         'u_net': {
             'image_size': 32,
@@ -47,17 +48,18 @@ def train_model(output_dir):
             'attn_resolutions': (16,),
             'dropout_rate': 0.1
         },
-        'beta_schedule': {
-            'timesteps': 1000
+        'data_augment': {
+            'random_flip': True
         }
     })
     
+    print_trainable_variables(model, params_only=True)
+
     # Create the output dir if it does not exist
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    # resume_from_epoch = 0
-    resume_from_epoch = 45
+    resume_from_epoch = 0
 
     if resume_from_epoch > 0:
         print('>> Resuming from epoch', resume_from_epoch)

@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 from datetime import timedelta
 import tensorflow as tf
 from diffusion_model import DiffusionModel
-from utils import SaveCheckpoint
+from utils import print_trainable_variables, SaveCheckpoint
 
 
 def create_data_loader(x, batch_size):
@@ -18,8 +18,8 @@ def create_data_loader(x, batch_size):
     """
     def preprocess(x):
         x = tf.cast(x, tf.float32)/255.0
-        x = tf.expand_dims(x, axis=-1)
         x = tf.pad(x, [[2, 2], [2, 2]], 'CONSTANT')
+        x = tf.expand_dims(x, axis=-1)
         return x
 
     ds = tf.data.Dataset.from_tensor_slices(x)
@@ -40,6 +40,7 @@ def train_model(output_dir):
     train_ds = create_data_loader(x_train, batch_size=128)
 
     # Create diffusion model
+    print('>> Creating diffusion model')
     model = DiffusionModel({
         'u_net': {
             'image_size': 32,
@@ -47,26 +48,24 @@ def train_model(output_dir):
             'base_channels': 64,
             'channel_multiplier': (1, 1, 2, 2),
             'num_resnet_blocks': 1,
-            'resample_with_conv': True,
             'attn_resolutions': (8,),
             'dropout_rate': 0.1
-        },
-        'beta_schedule': {
-            'timesteps': 1000
         }
     })
     
+    print_trainable_variables(model, params_only=True)
+
     # Create the output dir if it does not exist
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
-
+                                   
     # resume_from_epoch = 0
-    resume_from_epoch = 45
+    resume_from_epoch = 0
 
     if resume_from_epoch > 0:
         print('>> Resuming from epoch', resume_from_epoch)
-        print('checkpoints_dir:', checkpoints_dir)
         checkpoints_dir = os.path.join(output_dir, f'checkpoints_{resume_from_epoch}')
+        print('checkpoints_dir:', checkpoints_dir)
         if not os.path.isdir(checkpoints_dir):
             raise ValueError("Can't find checkpoints directory", checkpoints_dir)
 
