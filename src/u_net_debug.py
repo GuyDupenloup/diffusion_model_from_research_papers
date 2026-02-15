@@ -2,7 +2,6 @@
 # Licensed under the MIT License. See LICENSE file for details.
 
 import math
-from tabulate import tabulate
 import numpy as np
 import tensorflow as tf
 
@@ -15,6 +14,7 @@ def default_init(scale):
 )
 
 
+@tf.keras.utils.register_keras_serializable()
 class NiNLayer(tf.keras.layers.Layer):
     """
     Network-in-Network (NIN) layer for U-Net shortcut connections and self-attention block.
@@ -54,6 +54,7 @@ class NiNLayer(tf.keras.layers.Layer):
         return config
     
 
+@tf.keras.utils.register_keras_serializable()
 class TimeEmbedding(tf.keras.layers.Layer):
     def __init__(self, embedding_dim, name=None, **kwargs):
         super().__init__(name=name, **kwargs)
@@ -108,6 +109,7 @@ class TimeEmbedding(tf.keras.layers.Layer):
         return config
     
 
+@tf.keras.utils.register_keras_serializable()
 class ResamplingLayer(tf.keras.layers.Layer):
     """
     Resampling layer.
@@ -130,30 +132,36 @@ class ResamplingLayer(tf.keras.layers.Layer):
         Returns: Resampled feature map, a 4D tensor.
     """
 
-    def __init__(self, down_path, channels, name=None, **kwargs):
+    def __init__(self, downsample, channels, with_conv=True, name=None, **kwargs):
         super().__init__(name=name, **kwargs)
 
-        self.down_path = down_path
+        self.downsample = downsample
         self.channels = channels
+        self.with_conv = with_conv
 
-        if down_path:
-            self.down_conv = tf.keras.layers.Conv2D(channels, kernel_size=3, strides=2, padding='same')
+        if downsample:
+            if with_conv:
+                self.down_layer = tf.keras.layers.Conv2D(channels, kernel_size=3, strides=2, padding='same')
+            else:
+                self.down_layer = tf.keras.layers.AveragePooling2D(pool_size=(2, 2), strides=(2, 2), padding='same')
         else:
-            self.upsize = tf.keras.layers.UpSampling2D(size=(2, 2), interpolation='nearest')
-            self.up_conv = tf.keras.layers.Conv2D(channels, kernel_size=3, padding='same')
+            self.up_layer= tf.keras.layers.UpSampling2D(size=(2, 2), interpolation='nearest')
+            if with_conv:
+                self.up_conv = tf.keras.layers.Conv2D(channels, kernel_size=3, padding='same')
 
     def call(self, x):
         sh1 = x.shape
 
-        if self.down_path:
-            x = self.down_conv(x)
+        if self.downsample:
+            x = self.down_layer(x)
         else:
-            x = self.upsize(x)
-            x = self.up_conv(x)
-
+            x = self.up_layer(x)
+            if self.with_conv:
+                x = self.up_conv(x)
+        
         sh2 = x.shape
         print(f'  resample  {sh1} -> {sh2}')
-    
+
         return x
 
     def get_config(self):
@@ -165,6 +173,7 @@ class ResamplingLayer(tf.keras.layers.Layer):
         return config
     
 
+@tf.keras.utils.register_keras_serializable()
 class ResnetBlock(tf.keras.layers.Layer):
     """
     Residual block.
@@ -249,7 +258,7 @@ class ResnetBlock(tf.keras.layers.Layer):
         sh2 = h.shape
 
         print(f'    conv1  {sh1} -> {sh2}')
-    
+
         # Add in timestep embedding
         time_emb = tf.nn.silu(time_emb)
         time_emb = time_emb[:, None, None, :]   # Broadcast to (B, H, W, C)
@@ -263,16 +272,16 @@ class ResnetBlock(tf.keras.layers.Layer):
         sh2 = h.shape
 
         print(f'    conv2  {sh1} -> {sh2}')
-    
+
         if self.shortcut is not None:
             # The numbers of input/output channels are different.
             sh1 = x.shape
             x = self.shortcut(x)
             sh2 = x.shape
             print(f'    shortcut {sh1} -> {sh2}')
-
+        
         assert x.shape == h.shape
-    
+            
         # Residual connection
         h = x + h
 
@@ -287,6 +296,7 @@ class ResnetBlock(tf.keras.layers.Layer):
         return config
 
 
+@tf.keras.utils.register_keras_serializable()
 class AttentionBlock(tf.keras.layers.Layer):
     """
     Self-attention block with spatial dot-product attention.
@@ -356,7 +366,7 @@ class AttentionBlock(tf.keras.layers.Layer):
 
         sh2 = h.shape
         print(f'    attention  {sh1} -> {sh2}')
-    
+
         return h
 
     def get_config(self):
@@ -367,6 +377,7 @@ class AttentionBlock(tf.keras.layers.Layer):
         return config
     
 
+@tf.keras.utils.register_keras_serializable()
 class UNetStage(tf.keras.layers.Layer):
     """
     U-Net stage comprising ResNet blocks and optionally, attention blocks and a resampling layer.
@@ -397,7 +408,7 @@ class UNetStage(tf.keras.layers.Layer):
             Output feature map, a 4D tensor.
             Updated skip connections, a list of 4D tensor.
     """
-
+    
     def __init__(self,
         down_path,
         output_channels,
@@ -405,6 +416,7 @@ class UNetStage(tf.keras.layers.Layer):
         attn_resolutions, 
         resample,
         num_resnet_blocks=2,
+        resample_with_conv=True,
         dropout_rate=0.,
         name=None,
         **kwargs):
@@ -417,6 +429,7 @@ class UNetStage(tf.keras.layers.Layer):
         self.attn_resolutions = attn_resolutions
         self.resample = resample
         self.num_resnet_blocks = num_resnet_blocks
+        self.resample_with_conv = resample_with_conv
         self.dropout_rate = dropout_rate
 
         self.resnet_blocks = [
@@ -430,7 +443,11 @@ class UNetStage(tf.keras.layers.Layer):
         ]
    
         if resample:
-            self.resample_layer = ResamplingLayer(down_path, output_channels, name=f'{self.name}_resample')
+            self.resample_layer = ResamplingLayer(
+                down_path,
+                output_channels,
+                with_conv=resample_with_conv,
+                name=f'{self.name}_resample')
 
 
     def call(self, x, time_emb, skip_connections, training=None):
@@ -458,7 +475,23 @@ class UNetStage(tf.keras.layers.Layer):
 
         return x, skips
     
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'down_path': self.down_path,
+            'output_channels': self.output_channels,
+            'resolution': self.resolution,
+            'attn_resolutions': self.attn_resolutions,
+            'resample': self.resample,
+            'num_resnet_blocks': self.num_resnet_blocks,
+            'resample_with_conv': self.resample_with_conv,
+            'dropout_rate': self.dropout_rate
+        })
+        return config
+    
 
+@tf.keras.utils.register_keras_serializable()
 class Bottleneck(tf.keras.layers.Layer):
     """
     Bottleneck section of the U-Net (resides between the down and up paths).
@@ -489,7 +522,6 @@ class Bottleneck(tf.keras.layers.Layer):
         self.resnet2 = ResnetBlock(channels, dropout_rate=dropout_rate, name='resnet2')
 
     def call(self, x, time_emb, training=None):
-
         sh1 = x.shape
 
         print('  resnet1')
@@ -501,7 +533,7 @@ class Bottleneck(tf.keras.layers.Layer):
 
         sh2 = x.shape
         assert sh1 == sh2
-    
+
         return x
 
     def get_config(self):
@@ -513,6 +545,7 @@ class Bottleneck(tf.keras.layers.Layer):
         return config
 
 
+@tf.keras.utils.register_keras_serializable()
 class UNet(tf.keras.models.Model):
     """
     U-Net from the original DDPM paper.
@@ -552,7 +585,6 @@ class UNet(tf.keras.models.Model):
 
         dropout_rate (float):
             Dropout rate for the dropout layers in the ResNet blocks.
-            Default: 0.0
 
     Model call() method:
     -------------------
@@ -570,9 +602,10 @@ class UNet(tf.keras.models.Model):
         image_channels=None,
         base_channels=None,
         channel_multiplier=None,
-        num_resnet_blocks=None,
-        attn_resolutions=None,
-        dropout_rate=None,
+        num_resnet_blocks=2,
+        resample_with_conv=True,
+        attn_resolutions=(16,),
+        dropout_rate=0.,
         name=None,
         **kwargs,
     ):
@@ -584,8 +617,20 @@ class UNet(tf.keras.models.Model):
         self.base_channels = base_channels
         self.channel_multiplier = channel_multiplier
         self.num_resnet_blocks = num_resnet_blocks
+        self.resample_with_conv = resample_with_conv
         self.attn_resolutions = attn_resolutions
         self.dropout_rate = dropout_rate
+        
+        self.custom_objects = {
+            'NiNLayer': NiNLayer,
+            'TimeEmbedding': TimeEmbedding,
+            'ResamplingLayer': ResamplingLayer,
+            'ResnetBlock': ResnetBlock,
+            'AttentionBlock': AttentionBlock,
+            'UNetStage': UNetStage,
+            'Bottleneck': Bottleneck,
+            'UNet': UNet
+            }
         
         # Resolution sizes
         self.num_resolutions = len(channel_multiplier)
@@ -613,6 +658,7 @@ class UNet(tf.keras.models.Model):
                 attn_resolutions=attn_resolutions,
                 resample=(i != self.num_resolutions - 1),
                 num_resnet_blocks=num_resnet_blocks,
+                resample_with_conv=resample_with_conv,
                 dropout_rate=dropout_rate,
                 name=f'down_block{i}'
             )
@@ -631,6 +677,7 @@ class UNet(tf.keras.models.Model):
                 attn_resolutions=attn_resolutions,
                 resample=(i != 0),
                 num_resnet_blocks=num_resnet_blocks + 1,
+                resample_with_conv=resample_with_conv,
                 dropout_rate=dropout_rate,
                 name=f'up_block{i}'
             )
@@ -675,7 +722,7 @@ class UNet(tf.keras.models.Model):
         # Middle
         print('\nbottleneck')
         h = self.bottleneck(h, time_emb, training=training)
-        
+
         # Up blocks
         for i in range(self.num_resolutions):
             print()
@@ -687,11 +734,12 @@ class UNet(tf.keras.models.Model):
         h = self.norm_out(h, training=training)
         h = tf.nn.silu(h)
         h = self.conv_out(h)
+
         sh2 = h.shape
 
         print(f'\nconv_out\n{sh1} -> {sh2}\n')
 
-        print('\nchecking that all skip connections have been used')
+        # Check that all skip connections have been used
         assert skips == []
 
         return h
@@ -704,10 +752,12 @@ class UNet(tf.keras.models.Model):
             'base_channels': self.base_channels,
             'channel_multiplier': self.channel_multiplier,
             'num_resnet_blocks': self.num_resnet_blocks,
+            'resample_with_conv': self.resample_with_conv,
             'attn_resolutions': self.attn_resolutions,
             'dropout_rate': self.dropout_rate
         })
         return config
+
 
 
 model = UNet(
@@ -725,28 +775,3 @@ images = tf.random.uniform((2, 32, 32, 1))
 timesteps = tf.constant([0, 1], dtype=tf.int32)
 
 x = model((images, timesteps))
-
-
-def print_trainable_variables(model):
-    """
-    Prints the trainable variables of a model (name, shape, number of parameters)
-    """
-
-    print('\n' + '=' * 80)
-    print(f'  Trainable variables')
-    print('=' * 80 + '\n')
-
-    headers = ['Variable', 'Shape', '#Params']
-    data = []
-    total_params = 0
-
-    for var in model.trainable_variables:
-        num_params = int(np.prod(var.shape))
-        total_params += num_params
-        data.append([var.name, var.shape, f'{num_params:,.0f}'])
-
-    print(tabulate(data, headers=headers, tablefmt='pipe', colalign=('left', 'center', 'right')))
-    print(f'\nTotal trainable parameters: {total_params:,.0f}')
-
-
-# print_trainable_variables(model)
