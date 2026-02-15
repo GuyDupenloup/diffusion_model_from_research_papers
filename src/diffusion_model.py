@@ -318,7 +318,7 @@ class DiffusionModel(tf.keras.models.Model):
 
         return images
 
-    def ddim_sampling(self, num_samples, num_steps, eta=0.0):
+    def ddim_sampling(self, num_samples, num_steps=100, eta=0.0):
 
         batch_shape = (num_samples,) + self.image_shape
         images = tf.random.normal(batch_shape)
@@ -344,7 +344,6 @@ class DiffusionModel(tf.keras.models.Model):
 
             t_prev_tensor = tf.fill((num_samples,), t_prev)
 
-            # ---- SAFER: use gather ----
             alpha_bar_t = tf.gather(self.alpha_bar, t_tensor)
             alpha_bar_prev = tf.gather(self.alpha_bar, t_prev_tensor)
 
@@ -352,15 +351,13 @@ class DiffusionModel(tf.keras.models.Model):
             alpha_bar_t = tf.reshape(alpha_bar_t, [num_samples, 1, 1, 1])
             alpha_bar_prev = tf.reshape(alpha_bar_prev, [num_samples, 1, 1, 1])
 
-            # ---- Predict x0 ----
+            # Predict X0 and clip for stability
             x0_pred = (
                 images - tf.sqrt(1.0 - alpha_bar_t) * eps
             ) / tf.sqrt(alpha_bar_t)
-
-            # ---- IMPORTANT: clip x0 prediction for stability ----
             x0_pred = tf.clip_by_value(x0_pred, -1.0, 1.0)
 
-            # ---- Compute sigma (stochasticity) ----
+            # Compute sigma (stochasticity)
             if i < num_steps - 1:
                 sigma = eta * tf.sqrt(
                     (1.0 - alpha_bar_prev) / (1.0 - alpha_bar_t)
