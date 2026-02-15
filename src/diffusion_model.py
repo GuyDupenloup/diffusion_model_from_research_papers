@@ -11,6 +11,12 @@ from u_net import UNet
 
 # @tf.keras.utils.register_keras_serializable()
 class DiffusionModel(tf.keras.models.Model):
+    """
+    Diffusion model, including methods to:
+        - train the U-Net
+        - Update weights into the EMA network.
+        """
+
     def __init__(self, diffusion_config, name=None, **kwargs):
 
         super().__init__(name=name, **kwargs)
@@ -30,6 +36,7 @@ class DiffusionModel(tf.keras.models.Model):
             base_channels=cfg['base_channels'],
             channel_multiplier=cfg['channel_multiplier'],
             num_resnet_blocks=cfg['num_resnet_blocks'],
+            resample_with_conv=cfg['resample_with_conv'],
             attn_resolutions=cfg['attn_resolutions'],
             dropout_rate=cfg['dropout_rate'],
             name='u_net'
@@ -50,26 +57,49 @@ class DiffusionModel(tf.keras.models.Model):
         weights = self.u_net.get_weights()
         self.ema_net.set_weights(weights)
 
-        # Generate beta values
+        # Loss metric tracker for training
+        self.loss_tracker = tf.keras.metrics.Mean(name='loss')
+
+        # Generate beta values using cosine schedule
         cfg = self.model_config['beta_schedule']
         self.timesteps = cfg['timesteps']
-        self.beta_s = cfg['s']
-
         self.betas, self.alpha_bar = self.cosine_beta_schedule(
             self.timesteps, s=cfg['s'], beta_min=cfg['beta_min'], beta_max=cfg['beta_max']
         )
 
-        # Loss metric tracker for training
-        self.loss_tracker = tf.keras.metrics.Mean(name='loss')
-
+        # Precompute all sampling coefficients
+        alphas_cumprod = self.alpha_bar[1:]
+        alphas_cumprod_prev = self.alpha_bar[:-1]
+        alphas = 1.0 - self.betas
+        
+        self.posterior_variance = (
+            self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
+        )
+        self.posterior_mean_coef1 = (
+            self.betas * tf.sqrt(alphas_cumprod_prev) / (1.0 - alphas_cumprod)
+        )
+        self.posterior_mean_coef2 = (
+            (1.0 - alphas_cumprod_prev) * tf.sqrt(alphas) / (1.0 - alphas_cumprod)
+        )
+        self.sqrt_recip_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod)
+        self.sqrt_recipm1_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod - 1.0)
+        self.posterior_log_variance_clipped = tf.math.log(
+            tf.maximum(self.posterior_variance, 1e-20)
+        )
 
     def get_model_config(self, diffusion_cfg):
+        """
+        Completes the configuration passed in argument
+        using default values wherever needed.
+        """
+
         u_net_defaults = {
             'image_size': 32,
             'image_channels': 3,
             'base_channels': 128,
             'channel_multiplier': (1, 2, 2, 2),
             'num_resnet_blocks': 2,
+            'resample_with_conv': True,
             'attn_resolutions': (16,),
             'dropout_rate': 0.0
         }
@@ -96,6 +126,15 @@ class DiffusionModel(tf.keras.models.Model):
         return config
 
     def save(self, dirpath, overwrite=True):
+        """
+        Save the model configuration directory to a JSON file,
+        and the U-Net and EMA network in .keras files.
+
+        Arguments:
+            dirpath: Path to the directory where to save the configuration and model files.
+            overwrite: If True, the directory is overwritten if it already exists.
+                       Otherwise, an error is raised.
+        """
 
         if os.path.isdir(dirpath):
             if not overwrite:
@@ -114,14 +153,20 @@ class DiffusionModel(tf.keras.models.Model):
         self.ema_net.save(os.path.join(dirpath, 'ema_net.keras'))
 
     def load_u_net(self, filepath):
+        """
+        Loads an EMA model file in the diffusion model.
+        """
         if not os.path.isfile(filepath):
-            raise FileNotFoundError(f'Unable to find U-Net model file {filepath}')
+                raise FileNotFoundError(f'Unable to find U-Net model file {filepath}')
         self.u_net = tf.keras.models.load_model(
-            filepath,
-            custom_objects=self.u_net.custom_objects
-        )
+                filepath,
+                custom_objects=self.u_net.custom_objects
+            )
 
     def load_ema_net(self, filepath):
+        """
+        Loads a U-Net model file in the diffusion file.
+        """
         if not os.path.isfile(filepath):
             raise FileNotFoundError(f'Unable to find EMA model file {filepath}')
         self.ema_net = tf.keras.models.load_model(
@@ -129,15 +174,21 @@ class DiffusionModel(tf.keras.models.Model):
             custom_objects=self.ema_net.custom_objects
         )
  
-
-    # Generate beta values using a cosine schedule
     def cosine_beta_schedule(self, timesteps, s, beta_min, beta_max):
+        """
+        Generates beta values using a cosine schedule.
+
+        Arguments:
+            timesteps: Number of diffusion steps.
+            s: 
+            beta_min, beta_max: Valid beta value range (used for clipping).
+        """
 
         # t in [0, T]
         steps = timesteps + 1
         t = tf.linspace(0.0, timesteps, steps)
 
-        # cosine alpha_bar
+        # cosine alpha_bar           ==> this alpha_bar(t)  ??
         alpha_bar = tf.cos(
             ((t / timesteps) + s) / (1.0 + s) * (math.pi / 2)
         ) ** 2
@@ -145,16 +196,17 @@ class DiffusionModel(tf.keras.models.Model):
         # Normalize so alpha_bar[0] = 1
         alpha_bar = alpha_bar / alpha_bar[0]
 
-        # Derive betas
+        # Derive betas and ensure that they are in specified range
         betas = 1.0 - (alpha_bar[1:] / alpha_bar[:-1])
-
-        # Ensure that beta values are in the specified range
         betas = tf.clip_by_value(betas, beta_min, beta_max)
 
-        return alpha_bar, betas
-
+        return betas, alpha_bar
 
     def update_ema_weights(self):
+        """
+        Gets the weights from the U-Net and integrates them in the EMA network.
+        """
+
         # Linearly interpolate between online weights and EMA weights
         for weight, ema_weight in zip(self.u_net.trainable_variables, 
                                     self.ema_net.trainable_variables):
@@ -163,6 +215,9 @@ class DiffusionModel(tf.keras.models.Model):
             )
 
     def train_step(self, images):
+        """
+        Runs a training step for an input batch of images.
+        """
 
         # Randomly flip images horizontally
         images = tf.image.random_flip_left_right(images)
@@ -186,6 +241,7 @@ class DiffusionModel(tf.keras.models.Model):
             tf.sqrt(1.0 - alpha_bar_t) * noises
         )
 
+        # Predict noises using the U-Net and calculate the loss
         with tf.GradientTape() as tape:
             pred_noises = self.u_net([noisy_images, t], training=True)
             loss = tf.reduce_mean(tf.square(noises - pred_noises))
@@ -196,54 +252,10 @@ class DiffusionModel(tf.keras.models.Model):
         # Update the EMA weights
         self.update_ema_weights()
 
+        # Update the loss tracker
         self.loss_tracker.update_state(loss)
 
         return {m.name: m.result() for m in self.metrics}
-
-    '''
-    def ddpm_sampling(self, num_samples):
-
-        alphas = 1.0 - self.betas
-
-        batch_shape = (num_samples,) + self.image_shape
-        images = tf.random.normal(batch_shape)
-
-        save_steps = (1000, 750, 500, 250, 100, 50, 1)
-        images_array = tf.TensorArray(dtype=tf.float32, size=len(save_steps))
-
-        for t in reversed(range(self.timesteps)):
-            if t == 0 or t % 100 == 0:
-                print('t =', t)
-
-            t_tensor = tf.fill((num_samples,), t)
-            predicted_noise = self.ema_net((images, t_tensor), training=False)
-
-            if t > 0:
-                noise = tf.random.normal(batch_shape)
-            else:
-                noise = tf.zeros(batch_shape, dtype=tf.float32)
-            
-            mean_scale = 1.0 / tf.math.sqrt(alphas[t])
-            noise_scale = self.betas[t] / tf.math.sqrt(1 - self.alpha_bar[t])
-            sigma_t = tf.math.sqrt(self.betas[t])
-        
-            images = mean_scale * (images - noise_scale * predicted_noise) + sigma_t * noise
-
-            # Write to the array at index t
-            if t + 1 in save_steps:
-                images_array = images_array.write(t, images)
-    
-
-        # Stack the array. 
-        images = images_array.stack()
-
-        # Transpose to get shape: (20, 1000, 32, 32, 1)
-        images = tf.transpose(images, perm=[1, 0, 2, 3, 4])
-
-        images = tf.clip_by_value(images, -1.0, 1.0)
-
-        return images
-    '''
 
     def ddpm_sampling(self, num_samples):
         
@@ -279,7 +291,7 @@ class DiffusionModel(tf.keras.models.Model):
                 sqrt_recip_alphas_cumprod[t] * images - 
                 sqrt_recipm1_alphas_cumprod[t] * predicted_noise
             )
-            x_recon = tf.clip_by_value(x_recon, -1.0, 1.0)
+            # x_recon = tf.clip_by_value(x_recon, -1.0, 1.0)
             
             # Step 2: Compute posterior mean (like Ho's q_posterior)
             model_mean = (
@@ -295,10 +307,9 @@ class DiffusionModel(tf.keras.models.Model):
             else:
                 images = model_mean
         
-        # images = tf.clip_by_value(images, 0.0, 1.0)
+        images = tf.clip_by_value(images, 0.0, 1.0)
 
         return images
-
 
     def ddim_sampling(self, num_samples, num_steps, eta=0.0):
 
@@ -325,7 +336,7 @@ class DiffusionModel(tf.keras.models.Model):
                 t_prev = tf.constant(0, dtype=tf.int32)
 
             t_prev_tensor = tf.fill((num_samples,), t_prev)
-                                    
+
             # ---- SAFER: use gather ----
             alpha_bar_t = tf.gather(self.alpha_bar, t_tensor)
             alpha_bar_prev = tf.gather(self.alpha_bar, t_prev_tensor)
@@ -348,17 +359,18 @@ class DiffusionModel(tf.keras.models.Model):
                     (1.0 - alpha_bar_prev) / (1.0 - alpha_bar_t)
                     * (1.0 - alpha_bar_t / alpha_bar_prev)
                 )
-                noise = tf.random.normal(batch_shape) if eta > 0 else 0.0
+                noise = tf.random.normal(batch_shape) if eta > 0 else tf.zeros(batch_shape)
             else:
                 sigma = 0.0
-                noise = 0.0
+                noise = tf.zeros(batch_shape)
 
-            # ---- DDIM update ----
+            # ---- STANDARD DDIM UPDATE (corrected) ----
+            dir_xt = tf.sqrt(1.0 - alpha_bar_prev) * eps
+
             images = (
                 tf.sqrt(alpha_bar_prev) * x0_pred +
-                tf.sqrt(1.0 - alpha_bar_prev - sigma**2) * eps +
+                dir_xt +
                 sigma * noise
             )
 
         return images
-
