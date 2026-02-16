@@ -59,7 +59,7 @@ def train_model(output_dir):
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    resume_from_epoch = 0
+    resume_from_epoch = 102
 
     if resume_from_epoch > 0:
         print('>> Resuming from epoch', resume_from_epoch)
@@ -86,7 +86,7 @@ def train_model(output_dir):
         SaveCheckpoint(
             dirpath=os.path.join(output_dir, 'checkpoints'),
             basename='checkpoint',
-            period=5,
+            period=4,
             offset=resume_from_epoch,
             overwrite=True
         ),

@@ -17,7 +17,7 @@ def default_init(scale):
 @tf.keras.utils.register_keras_serializable()
 class NiNLayer(tf.keras.layers.Layer):
     """
-    Network-in-Network (NIN) layer for U-Net shortcut connections and self-attention block.
+    Network-in-Network (NIN) layer for U-Net shortcut connections and self-attention blocks.
     Implemented as a 1x1 convolution operation.
     
     Layer arguments:
@@ -72,10 +72,7 @@ class TimeEmbedding(tf.keras.layers.Layer):
 
     def get_timestep_embedding(self, timesteps):
         """
-        From Fairseq.
-        Build sinusoidal embeddings.
-        This matches the implementation in tensor2tensor, but differs slightly
-        from the description in Section 3.5 of "Attention Is All You Need".
+        Creates sinusoidal embeddings from "Attention Is All You Need" Transformer paper.
         """
 
         half_dim = self.embedding_dim // 2
@@ -132,30 +129,24 @@ class ResamplingLayer(tf.keras.layers.Layer):
         Returns: Resampled feature map, a 4D tensor.
     """
 
-    def __init__(self, downsample, channels, with_conv=True, name=None, **kwargs):
+    def __init__(self, downsample, channels, name=None, **kwargs):
         super().__init__(name=name, **kwargs)
 
         self.downsample = downsample
         self.channels = channels
-        self.with_conv = with_conv
 
         if downsample:
-            if with_conv:
-                self.down_layer = tf.keras.layers.Conv2D(channels, kernel_size=3, strides=2, padding='same')
-            else:
-                self.down_layer = tf.keras.layers.AveragePooling2D(pool_size=(2, 2), strides=(2, 2), padding='same')
+            self.down_layer = tf.keras.layers.Conv2D(channels, kernel_size=3, strides=2, padding='same')
         else:
             self.up_layer= tf.keras.layers.UpSampling2D(size=(2, 2), interpolation='nearest')
-            if with_conv:
-                self.up_conv = tf.keras.layers.Conv2D(channels, kernel_size=3, padding='same')
+            self.up_conv = tf.keras.layers.Conv2D(channels, kernel_size=3, padding='same')
 
     def call(self, x):
         if self.downsample:
             x = self.down_layer(x)
         else:
             x = self.up_layer(x)
-            if self.with_conv:
-                x = self.up_conv(x)
+            x = self.up_conv(x)
         return x
 
     def get_config(self):
@@ -391,7 +382,6 @@ class UNetStage(tf.keras.layers.Layer):
         attn_resolutions, 
         resample,
         num_resnet_blocks=2,
-        resample_with_conv=True,
         dropout_rate=0.,
         name=None,
         **kwargs):
@@ -404,7 +394,6 @@ class UNetStage(tf.keras.layers.Layer):
         self.attn_resolutions = attn_resolutions
         self.resample = resample
         self.num_resnet_blocks = num_resnet_blocks
-        self.resample_with_conv = resample_with_conv
         self.dropout_rate = dropout_rate
 
         self.resnet_blocks = [
@@ -421,7 +410,6 @@ class UNetStage(tf.keras.layers.Layer):
             self.resample_layer = ResamplingLayer(
                 down_path,
                 output_channels,
-                with_conv=resample_with_conv,
                 name=f'{self.name}_resample')
 
 
@@ -458,7 +446,6 @@ class UNetStage(tf.keras.layers.Layer):
             'attn_resolutions': self.attn_resolutions,
             'resample': self.resample,
             'num_resnet_blocks': self.num_resnet_blocks,
-            'resample_with_conv': self.resample_with_conv,
             'dropout_rate': self.dropout_rate
         })
         return config
@@ -569,7 +556,6 @@ class UNet(tf.keras.models.Model):
         base_channels=None,
         channel_multiplier=None,
         num_resnet_blocks=2,
-        resample_with_conv=True,
         attn_resolutions=(16,),
         dropout_rate=0.,
         name=None,
@@ -583,7 +569,6 @@ class UNet(tf.keras.models.Model):
         self.base_channels = base_channels
         self.channel_multiplier = channel_multiplier
         self.num_resnet_blocks = num_resnet_blocks
-        self.resample_with_conv = resample_with_conv
         self.attn_resolutions = attn_resolutions
         self.dropout_rate = dropout_rate
         
@@ -624,7 +609,6 @@ class UNet(tf.keras.models.Model):
                 attn_resolutions=attn_resolutions,
                 resample=(i != self.num_resolutions - 1),
                 num_resnet_blocks=num_resnet_blocks,
-                resample_with_conv=resample_with_conv,
                 dropout_rate=dropout_rate,
                 name=f'down_block{i}'
             )
@@ -643,7 +627,6 @@ class UNet(tf.keras.models.Model):
                 attn_resolutions=attn_resolutions,
                 resample=(i != 0),
                 num_resnet_blocks=num_resnet_blocks + 1,
-                resample_with_conv=resample_with_conv,
                 dropout_rate=dropout_rate,
                 name=f'up_block{i}'
             )
@@ -701,7 +684,6 @@ class UNet(tf.keras.models.Model):
             'base_channels': self.base_channels,
             'channel_multiplier': self.channel_multiplier,
             'num_resnet_blocks': self.num_resnet_blocks,
-            'resample_with_conv': self.resample_with_conv,
             'attn_resolutions': self.attn_resolutions,
             'dropout_rate': self.dropout_rate
         })

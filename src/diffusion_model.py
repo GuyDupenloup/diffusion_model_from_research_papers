@@ -37,7 +37,6 @@ class DiffusionModel(tf.keras.models.Model):
             base_channels=cfg['base_channels'],
             channel_multiplier=cfg['channel_multiplier'],
             num_resnet_blocks=cfg['num_resnet_blocks'],
-            resample_with_conv=cfg['resample_with_conv'],
             attn_resolutions=cfg['attn_resolutions'],
             dropout_rate=cfg['dropout_rate'],
             name='u_net'
@@ -100,7 +99,6 @@ class DiffusionModel(tf.keras.models.Model):
             'base_channels': 128,
             'channel_multiplier': (1, 2, 2, 2),
             'num_resnet_blocks': 2,
-            'resample_with_conv': True,
             'attn_resolutions': (16,),
             'dropout_rate': 0.0
         }
