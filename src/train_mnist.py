@@ -34,7 +34,7 @@ def train_model(output_dir):
 
     # Load CIFAR-10
     (x_train, y_train), _ = tf.keras.datasets.mnist.load_data()
-    
+
     # Create data loader for training set images
     train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
     train_ds = create_data_loader(x_train, batch_size=128)
@@ -58,24 +58,6 @@ def train_model(output_dir):
     # Create the output dir if it does not exist
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
-                                   
-    # resume_from_epoch = 0
-    resume_from_epoch = 0
-
-    if resume_from_epoch > 0:
-        print('>> Resuming from epoch', resume_from_epoch)
-        checkpoints_dir = os.path.join(output_dir, f'checkpoints_{resume_from_epoch}')
-        print('checkpoints_dir:', checkpoints_dir)
-        if not os.path.isdir(checkpoints_dir):
-            raise ValueError("Can't find checkpoints directory", checkpoints_dir)
-
-        fn = os.path.join(checkpoints_dir, f'checkpoint_u_net_{resume_from_epoch}.keras')
-        model.u_net = tf.keras.models.load_model(fn)
-        print('Loaded', fn)
-
-        fn = os.path.join(checkpoints_dir, f'checkpoint_ema_net_{resume_from_epoch}.keras')
-        model.ema_net = tf.keras.models.load_model(fn)
-        print('>> Loaded', fn)
 
     # Don't pass a loss function, the model handles it.
     model.compile(
@@ -88,7 +70,6 @@ def train_model(output_dir):
             dirpath=os.path.join(output_dir, 'checkpoints'),
             basename='checkpoint',
             period=5,
-            offset=resume_from_epoch,
             overwrite=True
         ),
         tf.keras.callbacks.CSVLogger(
@@ -101,7 +82,7 @@ def train_model(output_dir):
     start_time = timer()
     model.fit(
         train_ds,
-        epochs=100,
+        epochs=1,
         callbacks=callbacks,
     )
     end_time = timer()

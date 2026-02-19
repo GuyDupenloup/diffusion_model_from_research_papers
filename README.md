@@ -17,7 +17,7 @@ Subsequent papers introduced various improvements that ultimately enabled diffus
 
 The goal of this project was to recreate the DDPM model from the 2020 paper by Jonathan Ho et al., train it, and generate samples using both the DDPM and DDIM methods.
 
-Johnathan Ho posted on Github the TensorFlow code they used for their research, at this URL provided in the paper:
+Jonathan Ho posted on Github the TensorFlow code they used for their research, at this URL provided in the paper:
 
 [JohnathanHo/DDPM](https://github.com/hojonathanho/diffusion)
 
@@ -35,7 +35,7 @@ Because my goal was to gain a deep understanding of DDPM models, I only relied o
 
 From the start, I knew I wouldn’t have enough GPU resources to tackle the CelebA and LSUN datasets, so I decided to focus on CIFAR-10. However, as the project progressed, I realized I couldn’t train the same U-Net as in Ho’s code. Therefore, I began with the MNIST dataset. Then, I worked on CIFAR-10 using a smaller version of Ho’s U-Net, although I expected more modest results.
 
-## 3. Source code
+## 3. Source code and Python packages
 
 All my code is in TensorFlow 2. Custom Keras layers and models are used for the U-Net and diffusion models.
 
@@ -54,6 +54,8 @@ The code is in the *./src* directory and is organized as shown below.
     |
     └── utils.py                   # Utilities (model summary, checkpoint saving callback)
 ```
+
+See file *requirements.txt* for the list of Python packages I used.
 
 ## 4. Information missing in the DDPM paper
 
@@ -184,7 +186,7 @@ Due to limited GPU resources, I could only train the model for 120 epochs.
 
 ### 7.3 Sampling
 
-Only about one out of ten of the generated images had valuable quality. Diversity was fine, although cars and trucks were slightly over-represented. Clearly, better results could have been obtained with a U-Net of the same size as in Ho's code, and more training epochs.
+Only about one out of ten of the generated images had acceptable quality. Diversity was fine, although cars and trucks were slightly over-represented. Clearly, better results could have been obtained with a U-Net of the same size as in Ho's code, and more training epochs.
 
 Examples of quality images I could obtain are shown in Figure 6.
 
