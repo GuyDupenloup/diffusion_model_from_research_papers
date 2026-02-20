@@ -14,6 +14,18 @@ def sample_model(
     num_steps=100,
     eta=0.0
 ):
+    """
+    Loads and samples a diffusion model.
+
+    Arguments:
+        model_dir (str): path to the directory where the model files are
+                         ('config.json' and 'ema_net.keras').
+        num_samples (int): number of samples to generate.
+        samples_filepath (str): samples filepath.
+        method (str): sampling method. Either 'ddpm' or 'ddim'.
+
+    The generated samples are saved in a numpy array.
+    """
 
     # Load the diffusion model and EMA network
     model = load_diffusion_model(model_dir, ema_net_only=True)
@@ -24,6 +36,7 @@ def sample_model(
     else:
         samples = model.ddim_sampling(num_samples, num_steps=num_steps, eta=eta)
 
+    # Convert samples from TF tensor to numpy array, then save the array
     samples = np.array(samples, np.float32)
     np.save(samples_filepath, samples)
 
