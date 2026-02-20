@@ -1,42 +1,9 @@
 # Copyright (c) 2026 Guy Dupenloup
 # Licensed under the MIT License. See LICENSE file for details.
 
-import os
 import argparse
-import json
 import numpy as np
-import tensorflow as tf
-from diffusion_model import DiffusionModel
-
-
-def load_ema_model(model_dir):
-
-    # Check that the model directory exists
-    if not os.path.isdir(model_dir):
-        raise FileNotFoundError(f'unable to find model directory {model_dir}')
-
-    # Check that the config and EMA model files are present
-    config_filepath = os.path.join(model_dir, 'config.json')
-    if not os.path.isfile(os.path.join(model_dir, 'config.json')):
-        raise FileNotFoundError(f'unable to find configuration file {config_filepath}')
-
-    ema_filepath = os.path.join(model_dir, 'ema_net.keras')
-    if not os.path.isfile(os.path.join(model_dir, 'ema_net.keras')):
-        raise FileNotFoundError(f'unable to find EMA model file {ema_filepath}')
-
-    # Read JSON config file
-    with open(os.path.join(model_dir, 'config.json'), 'r', encoding='utf-8') as file:
-        config = json.load(file)
-
-    # Create diffusion model
-    model = DiffusionModel(config)
-
-    # Load EMA model
-    ema_filepath = os.path.join(model_dir, 'ema_net.keras')
-    print(f'>> Loading EMA network {ema_filepath}')
-    model.load_ema_net(ema_filepath)
- 
-    return model
+from utils import load_diffusion_model
 
 
 def sample_model(
@@ -48,8 +15,9 @@ def sample_model(
     eta=0.0
 ):
 
-    # Load the EMA model
-    model = load_ema_model(model_dir)
+    # Load the diffusion model and EMA network
+    model = load_diffusion_model(model_dir, ema_net_only=True)
+    print(f'>> Loaded diffusion model from directory {model_dir}')
 
     if method == 'ddpm':
         samples = model.ddpm_sampling(num_samples)

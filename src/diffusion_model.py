@@ -13,15 +13,51 @@ from u_net import UNet
 class DiffusionModel(tf.keras.models.Model):
     """
     Diffusion model, including methods to:
-        - train the U-Net
-        - Update weights into the EMA network.
-        """
+        - Create the U-Net and EMA network
+        - Train the U-Net and update the EMA network
+        - Save the configuration, U-Net and EMA network to files
+        - Train the U-Net and update weights of the EMA network
+        - Sample the EMA model using DDPM and DDIM sampling methods
+
+    The model configuration is passed as a dictionary, as shown below with default parameters:
+        {
+            # U-Net configuration parameters
+            'u_net': {
+                'image_size': 32,
+                'image_channels': 3,
+                'base_channels': 128,
+                'channel_multiplier': [1, 2, 2, 2],
+                'num_resnet_blocks': 2,
+                'attn_resolutions': (16,)
+                'dropout_rate': 0.0
+            },
+
+            # Input images augmentation
+            'data_augment': {
+                'random_flip': False
+            },
+
+            # Cosine beta schedule parameters
+            'beta_schedule': {
+                'timesteps': 1000,
+                's': 0.008,
+                'beta_min': 1e-05,
+                'beta_max': 0.999
+            },
+
+            # Moving average parameters for EMA network
+            'ema': {
+                'decay': 0.999
+            }
+        }
+
+    """
 
     def __init__(self, diffusion_config, name=None, **kwargs):
 
         super().__init__(name=name, **kwargs)
 
-        self.model_config = self.get_model_config(diffusion_config)
+        self.model_config = self.complete_model_config(diffusion_config)
 
         # Create U-Net model
         cfg = self.model_config['u_net']
@@ -67,32 +103,12 @@ class DiffusionModel(tf.keras.models.Model):
             self.timesteps, s=cfg['s'], beta_min=cfg['beta_min'], beta_max=cfg['beta_max']
         )
 
-        # Precompute all sampling coefficients
-        alphas_cumprod = self.alpha_bar[1:]
-        alphas_cumprod_prev = self.alpha_bar[:-1]
-        alphas = 1.0 - self.betas
-        
-        self.posterior_variance = (
-            self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
-        )
-        self.posterior_mean_coef1 = (
-            self.betas * tf.sqrt(alphas_cumprod_prev) / (1.0 - alphas_cumprod)
-        )
-        self.posterior_mean_coef2 = (
-            (1.0 - alphas_cumprod_prev) * tf.sqrt(alphas) / (1.0 - alphas_cumprod)
-        )
-        self.sqrt_recip_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod)
-        self.sqrt_recipm1_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod - 1.0)
-        self.posterior_log_variance_clipped = tf.math.log(
-            tf.maximum(self.posterior_variance, 1e-20)
-        )
-
-    def get_model_config(self, diffusion_cfg):
+    def complete_model_config(self, diffusion_cfg):
         """
-        Completes the configuration passed in argument
-        using default values wherever needed.
+        Completes the model configuration passed in argument using default values.
         """
 
+        # U-Net configuration parameters
         u_net_defaults = {
             'image_size': 32,
             'image_channels': 3,
@@ -102,15 +118,21 @@ class DiffusionModel(tf.keras.models.Model):
             'attn_resolutions': (16,),
             'dropout_rate': 0.0
         }
+
+        # Input images augmentation
         data_augment_defaults = {
             'random_flip': False
         }
+
+        # Cosine beta schedule parameters
         beta_schedule_defaults = {
             'timesteps': 1000,
             's': 0.008,
             'beta_min': 1e-5,
             'beta_max': 0.999
         }
+
+        # Moving average parameters for EMA network
         ema_defaults = {
             'decay': 0.999
         }
@@ -131,18 +153,23 @@ class DiffusionModel(tf.keras.models.Model):
 
     def save(self, dirpath, overwrite=True):
         """
-        Save the model configuration directory to a JSON file,
-        and the U-Net and EMA network in .keras files.
+        Saves the following files to a directory:
+            - Model configuration:  'config.json'
+            - U-net model:  'u_net.keras'
+            - EMA network:  'ema_net.keras'
+        The diffusion model can be recreated from these files.
 
         Arguments:
-            dirpath: Path to the directory where to save the configuration and model files.
-            overwrite: If True, the directory is overwritten if it already exists.
+            dirpath (str): Path to the directory where to save files.
+            overwrite (bool): If True, the directory is overwritten if it already exists.
                        Otherwise, an error is raised.
         """
 
         if os.path.isdir(dirpath):
             if not overwrite:
-                raise ValueError(f'Unable to save diffusion model. Directory {dirpath} already exists.')
+                raise ValueError(f'Unable to save diffusion model. '
+                                 'Directory {dirpath} already exists.'
+                )
             shutil.rmtree(dirpath)
         os.mkdir(dirpath)
 
@@ -156,36 +183,16 @@ class DiffusionModel(tf.keras.models.Model):
         # Save EMA network to keras file
         self.ema_net.save(os.path.join(dirpath, 'ema_net.keras'))
 
-    def load_u_net(self, filepath):
-        """
-        Loads an EMA model file in the diffusion model.
-        """
-        if not os.path.isfile(filepath):
-                raise FileNotFoundError(f'Unable to find U-Net model file {filepath}')
-        self.u_net = tf.keras.models.load_model(
-                filepath,
-                custom_objects=self.u_net.custom_objects
-            )
 
-    def load_ema_net(self, filepath):
-        """
-        Loads a U-Net model file in the diffusion file.
-        """
-        if not os.path.isfile(filepath):
-            raise FileNotFoundError(f'Unable to find EMA model file {filepath}')
-        self.ema_net = tf.keras.models.load_model(
-            filepath,
-            custom_objects=self.ema_net.custom_objects
-        )
- 
     def cosine_beta_schedule(self, timesteps, s, beta_min, beta_max):
         """
         Generates beta values using a cosine schedule.
 
         Arguments:
-            timesteps: Number of diffusion steps.
-            s: 
-            beta_min, beta_max: Valid beta value range (used for clipping).
+            timesteps (int): Number of diffusion steps.
+            s (float): offset that control the starting point (shifts the cosine)
+            and curvature of the cosine.
+            beta_min, beta_max (floats): Valid beta value range (used for clipping).
         """
 
         # t in [0, T]
@@ -206,9 +213,10 @@ class DiffusionModel(tf.keras.models.Model):
 
         return betas, alpha_bar
 
+        
     def update_ema_weights(self):
         """
-        Gets the weights from the U-Net and integrates them in the EMA network.
+        Gets the weights from the U-Net and update EMA's moving average.
         """
 
         # Linearly interpolate between online weights and EMA weights
@@ -228,7 +236,6 @@ class DiffusionModel(tf.keras.models.Model):
             images = tf.image.random_flip_left_right(images)
 
         batch_size = tf.shape(images)[0]
-        alpha_bar = tf.math.cumprod(1 - self.betas)
 
         # Sample t
         t = tf.random.uniform((batch_size,), minval=0, maxval=self.timesteps, dtype=tf.int32)
@@ -237,7 +244,7 @@ class DiffusionModel(tf.keras.models.Model):
         noises = tf.random.normal(tf.shape(images))
 
         # Get alpha_bar_t
-        alpha_bar_t = tf.gather(alpha_bar, t)
+        alpha_bar_t = tf.gather(self.alpha_bar, t)
         alpha_bar_t = tf.reshape(alpha_bar_t, [-1, 1, 1, 1])
 
         # Create noisy image x_t
@@ -263,7 +270,11 @@ class DiffusionModel(tf.keras.models.Model):
         return {m.name: m.result() for m in self.metrics}
 
     def ddpm_sampling(self, num_samples):
-        
+        """
+        Samples the EMA network using the method from the DDPM paper.
+        Argument `num_samples` is the number of samples to generate.
+        """
+
         alphas = 1.0 - self.betas
         alphas_cumprod = tf.math.cumprod(alphas, axis=0)
         alphas_cumprod_prev = tf.concat([[1.0], alphas_cumprod[:-1]], axis=0)
@@ -278,7 +289,7 @@ class DiffusionModel(tf.keras.models.Model):
         posterior_mean_coef2 = (
             (1.0 - alphas_cumprod_prev) * tf.sqrt(alphas) / (1.0 - alphas_cumprod)
         )
-        
+
         # Coefficients for predicting x_0 from noise
         sqrt_recip_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod)
         sqrt_recipm1_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod - 1.0)
@@ -317,11 +328,22 @@ class DiffusionModel(tf.keras.models.Model):
         return images
 
     def ddim_sampling(self, num_samples, num_steps=100, eta=0.0):
+        """
+        Samples the EMA network using the method from the DDIM paper.
+
+        Arguments:
+            num_samples (int): Number of samples to generate.
+            num_steps (int): Number of timesteps used during the reverse diffusion process.
+            eta (float):
+                - Controls the stochasticity of the sampling process.
+                - If `eta` = 0.0, the process is purely deterministic. If `eta` > 0.0, it becomes
+                  stochastic (more diverse but potentially less stable results).
+        """
 
         batch_shape = (num_samples,) + self.image_shape
         images = tf.random.normal(batch_shape)
 
-        # ---- FIXED TIMESTEP SCHEDULE ----
+        # Fixed timestep schedule
         steps = tf.linspace(0.0, tf.cast(self.timesteps - 1, tf.float32), num_steps)
         steps = tf.cast(steps, tf.int32)
         steps = tf.reverse(steps, axis=[0])  # go from T -> 0
@@ -366,7 +388,7 @@ class DiffusionModel(tf.keras.models.Model):
                 sigma = 0.0
                 noise = tf.zeros(batch_shape)
 
-            # ---- STANDARD DDIM UPDATE (corrected) ----
+            # DDIM update
             dir_xt = tf.sqrt(1.0 - alpha_bar_prev) * eps
 
             images = (

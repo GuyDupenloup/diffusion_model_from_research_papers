@@ -3,9 +3,54 @@
 
 import os
 import shutil
+import json
 from tabulate import tabulate
 import numpy as np
 import tensorflow as tf
+from diffusion_model import DiffusionModel
+
+
+def load_diffusion_model(dirpath, ema_net_only=False):
+    """
+    Creates a diffusion model from the following files in directory `dir_path`:
+        - Model configuration:  'config.json'
+        - U-net model:  'u_net.keras'
+        - EMA network:  'ema_net.keras'
+
+    These files are created when calling the `save()` method of a diffusion model.
+    """
+
+    if not os.path.isdir(dirpath):
+        raise ValueError(f'Unable to find diffusion model directory {dirpath}')
+
+    # Load the configuration file
+    fn = os.path.join(dirpath, 'config.json')
+    if not os.path.isfile(fn):
+        raise ValueError(f'Unable to find diffusion model configuration file {fn}')
+    with open(fn, 'r', encoding='utf-8') as file:
+        config = json.load(file)
+
+    # Create the diffusion model
+    model = DiffusionModel(config)
+
+    # Load the U-Net model into the diffusion model
+    if not ema_net_only:
+        fn = os.path.join(dirpath, 'u_net.keras')
+        if not os.path.isfile(fn):
+            raise ValueError(f'Unable to find U-Net model file {fn}')
+        
+        u_net = tf.keras.models.load_model(fn)
+        model.u_net = u_net
+
+    # Load the EMA model into the diffusion model
+    fn = os.path.join(dirpath, 'ema_net.keras')
+    if not os.path.isfile(fn):
+        raise ValueError(f'Unable to find EMA model file {fn}')
+    
+    ema_net = tf.keras.models.load_model(fn)
+    model.ema_net = ema_net
+
+    return model
 
 
 def print_trainable_variables(model, params_only=False):
