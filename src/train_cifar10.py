@@ -44,7 +44,7 @@ def train_model(output_dir):
             'image_channels': 3,
             'base_channels': 128,
             'channel_multiplier': (1, 2, 2, 2),
-            'num_resnet_blocks': 1,
+            'num_resnet_blocks': 2,
             'attn_resolutions': (16,),
             'dropout_rate': 0.1
         },

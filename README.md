@@ -33,8 +33,6 @@ Many PyTorch implementations of DDPM are now available on GitHub, including:
 
 Because my goal was to gain a deep understanding of DDPM models, I only relied on the 2020 DDPM and DDIM papers, and some of the works they reference. I only looked at Ho's code on GitHub when important implementation details were not specified in the paper.
 
-From the start, I knew I wouldn’t have enough GPU resources to tackle the CelebA and LSUN datasets, so I decided to focus on CIFAR-10. However, as the project progressed, I realized I couldn’t train the same U-Net as in Ho’s code. Therefore, I began with the MNIST dataset. Then, I worked on CIFAR-10 using a smaller version of Ho’s U-Net, although I expected more modest results.
-
 ## 3. Source code and Python packages
 
 All my code is in TensorFlow 2. Custom Keras layers and models are used for the U-Net and diffusion models.
@@ -167,9 +165,7 @@ On Google Colab using a T4 GPU, generating a batch of 128 images takes 4:45min w
 
 ### 7.1 U-Net
 
-For CIFAR-10, I used the same U-Net as in Ho's code (Figure 1), except that I reduced the number of ResNet blocks per up/down stage from 2 to 1.
-
-With this setup, the network has 24.5M parameters versus 35.9M for Ho's network.
+For CIFAR-10, I used the same U-Net as in Ho's code (Figure 1).
 
 ### 7.2 Training setup
 
@@ -182,21 +178,33 @@ We used random horizontal flips during training for CIFAR10; we tried training b
 and without flips, and found flips to improve sample quality slightly.
 ```
 
-Due to limited GPU resources, I could only train the model for 120 epochs.
+I trained the model for 150 epochs.
 
 ### 7.3 Sampling
 
-Only about one out of ten of the generated images had acceptable quality. Diversity was fine, although cars and trucks were slightly over-represented. Clearly, better results could have been obtained with a U-Net of the same size as in Ho's code, and more training epochs.
+Figure 6 shows examples of images obtained using the DDPM sampling method, and Figure 7 some others obtained using the DDIM sampling method.
 
-Examples of quality images I could obtain are shown in Figure 6.
+![](pictures/cifar10_ddpm_samples.png)
 
-![](pictures/cifar10_samples.png)
 
+![](pictures/cifar10_ddim_samples.png)
+
+I looked at a batch of 500 images.
+
+There were just a handful of images where I was unable to locate or recognize any subject (animal or object). About 10% of images had rather low quality, with imprecise subject contours or pixels with wrong color partially masking the subject. I also found a few images with completely wrong colors.
+
+Some strange/funny images are shown on the last row of Figure 7:
+- A cat with a red mouse on top of its head
+- An entirely red dog lying on the ground
+- A pink cat
+- A deer with front legs shaped like horns
 
 ## 8. Conclusion
 
 This concludes my diffusion model from research papers project.
 
-I obtained great results with the MNIST dataset and despite GPU limitations, I was able to generate some quality images with the CIFAR-10 dataset.
+I obtained great results with the MNIST dataset. Results on CIFAR-10 are also good and consistent with the DDPM paper.
+
+I did not attempt the CelebA and LSUN datasets as I did not have enough GPU resources.
 
 It was absolutely fascinating to see images emerge from pure noise!

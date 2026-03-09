@@ -16,6 +16,7 @@ def sample_model(
 ):
     """
     Loads and samples a diffusion model.
+    The generated samples are saved in a numpy file.
 
     Arguments:
         model_dir (str): path to the directory where the model files are
@@ -24,7 +25,12 @@ def sample_model(
         samples_filepath (str): samples filepath.
         method (str): sampling method. Either 'ddpm' or 'ddim'.
 
-    The generated samples are saved in a numpy array.
+        For DDIM method only:
+            num_steps (int): Number of timesteps used during the reverse diffusion process.
+            eta (float):
+                - Controls the stochasticity of the sampling process.
+                - If `eta` = 0.0, the process is purely deterministic. If `eta` > 0.0, it becomes
+                  stochastic (more diverse but potentially less stable results).
     """
 
     # Load the diffusion model and EMA network
