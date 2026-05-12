@@ -201,7 +201,7 @@ Figure 7 shows some image samples obtained using the DDIM sampling method. Examp
 
 ## 8. Conclusion
 
-Reproducing the diffusion model from the landmark DDPM paper by Jonathan Ho et al. was a great way to gain an understanding of how diffusion models work, from the mathematical formulation of the forward and reverse processes to the implementation details of the U-Net architecture, timestep embeddings, normalization layers, and sampling procedures.
+Reproducing the diffusion model from the landmark DDPM paper by Jonathan Ho et al. was a great way to gain an understanding of how diffusion models work, from the mathematical formulation of the forward and reverse processes to the implementation details of the U-Net architecture, timestep embeddings, ResNet blocks, and sampling procedures.
 
 The generated MNIST and CIFAR-10 samples showed that the models learned meaningful image distributions and were able to synthesize coherent images, although some samples exhibited hallucinations. DDIM sampling demonstrated a substantial runtime advantage over DDPM sampling, as expected.
 
