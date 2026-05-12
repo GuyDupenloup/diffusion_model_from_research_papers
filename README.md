@@ -13,7 +13,7 @@ Because it required many iterative steps, the sampling method used in the DDPM p
 
 Subsequent papers introduced various improvements that ultimately enabled diffusion models to produce higher-quality images than GANs, while being significantly easier to train.
 
-## 2. Project goal
+## 2. Project goals
 
 The goal of this project was to recreate the DDPM model from the 2020 paper by Jonathan Ho et al., train it, and generate samples using both the DDPM and DDIM methods.
 
@@ -33,9 +33,12 @@ Many PyTorch implementations of DDPM are now available on GitHub, including:
 
 Because my goal was to gain a deep understanding of DDPM models, I only relied on the 2020 DDPM and DDIM papers, and some of the works they reference. I only looked at Ho's code on GitHub when important implementation details were not specified in the paper.
 
+I first trained a diffusion model on MNIST using a scaled-down version of the U-Net the authors of the DDPM paper used for CIFAR-10 (MNIST is not mentioned in the paper). Then, I trained a model on CIFAR-10 using the same U-Net as the authors. I did not attempt to train models on the LSUN or CelebA-HD datasets due to GPU availability constraints.
+
+
 ## 3. Source code and Python packages
 
-All my code is in TensorFlow 2. Custom Keras layers and models are used for the U-Net and diffusion models.
+All the code is in TensorFlow 2. Custom Keras layers and models are used for the U-Net and diffusion models.
 
 The code is in the *./src* directory and is organized as shown below.
 
@@ -44,7 +47,7 @@ The code is in the *./src* directory and is organized as shown below.
     |     
     ├── u_net.py                   # U-Net model
     |
-    ├── u_net_debug.py             # Same as u_net.py with prints and shape assertions
+    ├── u_net_debug.py             # Same as u_net.py with prints and tensor shape assertions
     |
     ├── train.py                   # Diffusion model training script
     |
@@ -119,7 +122,7 @@ In the CIFAR-10 configuration (Figure 1), my U-Net model has 35.9M parameters. I
 
 ### 6.1 U-Net
 
-The U-Net I used for the MNIST dataset is shown in Figure 3.
+The U-Net I used for the MNIST dataset is shown in Figure 3. It is a scaled-down version of the U-Net the authors of the DDPM paper used for the CIFAR-10 dataset.
 
 ![](pictures/unet_mnist.png)
 
@@ -151,15 +154,15 @@ I trained the model for 100 epochs.
 
 ### 6.3 Sampling
 
-Examples of samples obtained with the DDPM sampling method are shown in Figure 4. The images are shown at different time steps of the reverse process. The quality of the generated images is quite good, and so is diversity.
+Examples of samples obtained with the DDPM sampling method are shown in Figure 4. The images are shown at different time steps of the reverse process.
 
 ![](pictures/mnist_ddpm_samples.png)
 
-Examples of samples obtained with the DDIM sampling method are shown in Figure 5. Only 50 steps were used to obtain these images, using a completely deterministic method. Image quality and diversity are quite good.
+Examples of samples obtained with the DDIM sampling method are shown in Figure 5. Only 50 steps were used to obtain these images, using a completely deterministic method.
 
 ![](pictures/mnist_ddim_samples.png)
 
-On Google Colab using a T4 GPU, generating a batch of 128 images takes 4:45min wall-clock with the DDPM sampling method, compared to only 16sec with the DDIM method.
+On a T4 GPU, generating a batch of 128 images takes 4:45min wall-clock with the DDPM sampling method, compared to only 16sec with the DDIM method.
 
 ## 7. CIFAR-10 dataset
 
@@ -182,29 +185,24 @@ I trained the model for 150 epochs.
 
 ### 7.3 Sampling
 
-Figure 6 shows examples of images obtained using the DDPM sampling method, and Figure 7 some others obtained using the DDIM sampling method.
+Figure 6 shows examples of images obtained using the DDPM sampling method.
 
 ![](pictures/cifar10_ddpm_samples.png)
 
+Figure 7 shows some image samples obtained using the DDIM sampling method. Examples of generative hallucinations are shown on the last row of images:
 
-![](pictures/cifar10_ddim_samples.png)
-
-I looked at a batch of 500 images.
-
-There were just a handful of images where I was unable to locate or recognize any subject (animal or object). About 10% of images had rather low quality, with imprecise subject contours or pixels with wrong color partially masking the subject. I also found a few images with completely wrong colors.
-
-Some strange/funny images are shown on the last row of Figure 7:
 - A cat with a red mouse on top of its head
 - An entirely red dog lying on the ground
 - A pink cat
 - A deer with front legs shaped like horns
 
+![](pictures/cifar10_ddim_samples.png)
+
+
 ## 8. Conclusion
 
-This concludes my diffusion model from research papers project.
+Reproducing the diffusion model from the landmark DDPM paper by Jonathan Ho et al. was a great way to gain an understanding of how diffusion models work, from the mathematical formulation of the forward and reverse processes to the implementation details of the U-Net architecture, timestep embeddings, normalization layers, and sampling procedures.
 
-I obtained great results with the MNIST dataset. Results on CIFAR-10 are also good and consistent with the DDPM paper.
+The generated MNIST and CIFAR-10 samples showed that the models learned meaningful image distributions and were able to synthesize coherent images, although some samples exhibited hallucinations. DDIM sampling demonstrated a substantial runtime advantage over DDPM sampling, as expected.
 
-I did not attempt the CelebA and LSUN datasets as I did not have enough GPU resources.
-
-It was absolutely fascinating to see images emerge from pure noise!
+It was absolutely fascinating to observe images progressively emerging from noise during the reverse process!
