@@ -18,7 +18,7 @@ def create_data_loader(x, batch_size):
     """
     def preprocess(x):
         x = tf.cast(x, tf.float32)/255.0
-        x = tf.pad(x, [[2, 2], [2, 2]], 'CONSTANT')
+        x = tf.pad(x, [[2, 2], [2, 2]], "CONSTANT")
         x = tf.expand_dims(x, axis=-1)
         return x
 
@@ -40,16 +40,16 @@ def train_model(output_dir):
     train_ds = create_data_loader(x_train, batch_size=128)
 
     # Create diffusion model
-    print('>> Creating diffusion model')
+    print(">> Creating diffusion model")
     model = DiffusionModel({
-        'u_net': {
-            'image_size': 32,
-            'image_channels': 1,
-            'base_channels': 64,
-            'channel_multiplier': (1, 1, 2, 2),
-            'num_resnet_blocks': 1,
-            'attn_resolutions': (8,),
-            'dropout_rate': 0.1
+        "u_net": {
+            "image_size": 32,
+            "image_channels": 1,
+            "base_channels": 64,
+            "channel_multiplier": (1, 1, 2, 2),
+            "num_resnet_blocks": 1,
+            "attn_resolutions": (8,),
+            "dropout_rate": 0.1
         }
     })
     
@@ -59,7 +59,7 @@ def train_model(output_dir):
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    # Don't pass a loss function, the model handles it.
+    # Don"t pass a loss function, the model handles it.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
@@ -67,18 +67,18 @@ def train_model(output_dir):
     # Set up callbacks
     callbacks = [
         SaveCheckpoint(
-            dirpath=os.path.join(output_dir, 'checkpoints'),
-            basename='checkpoint',
+            dirpath=os.path.join(output_dir, "checkpoints"),
+            basename="checkpoint",
             period=5,
             overwrite=True
         ),
         tf.keras.callbacks.CSVLogger(
-            filename=os.path.join(output_dir, 'metrics.csv')
+            filename=os.path.join(output_dir, "metrics.csv")
         )
     ]
 
     # Train model
-    print('>> Starting training')
+    print(">> Starting training")
     start_time = timer()
     model.fit(
         train_ds,
@@ -87,20 +87,20 @@ def train_model(output_dir):
     )
     end_time = timer()
     train_run_time = int(end_time - start_time)
-    print('>> Training runtime: ' + str(timedelta(seconds=train_run_time))) 
+    print(">> Training runtime: " + str(timedelta(seconds=train_run_time))) 
 
     # Save the config file and the two models (U-Net and EMA)
-    model.save(os.path.join(output_dir, 'trained_model'), overwrite=True)
+    model.save(os.path.join(output_dir, "trained_model"), overwrite=True)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--output_dir',
-        help='Directory where to save training output files (model config, checkpoint, etc.)',
+        "--output_dir",
+        help="Directory where to save training output files (model config, checkpoint, etc.)",
         type=str,
-        default='./train_output'
+        default="./train_output"
     )
 
     args = parser.parse_args()

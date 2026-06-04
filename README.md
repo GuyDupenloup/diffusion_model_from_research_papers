@@ -138,17 +138,16 @@ I made the following changes to the U-Net in Ho's code:
 
 ### 6.2 Training setup
 
-For training, I used the loss function described in section "*3.4 Simplified training objective*" of the DDPM paper, which is a simplified expression of the ELBO.
-
-I used the training setup that is described in "*Appendix B: Experimental Details*":
+I used the training setup the authors of the DDPM paper described in "*Appendix B: Experimental details*":
 
 - Timesteps: 1000
+- EMA decay factor: 0.9999
+- Data augmentation: random horizontal flips
 - Dropout rate: 0.1
 - Optimizer: Adam with learning rate 2e-4
 - Batch size: 128
-- EMA decay factor: 0.9999
 
-DDPM used a linear beta schedule. Instead, I used the cosine schedule introduced by Nichol & Dhariwal in 2021. This type of schedule was shown to improve results in many settings as it avoids destroying image information too quickly at the beginning of the forward process, as observed with linear schedules.
+The authors used a linear beta schedule. Instead, I used the cosine variance schedule introduced by Nichol & Dhariwal in 2021. This type of schedule was shown to improve results in many settings as it avoids destroying image information too quickly at the beginning of the forward process, as observed with linear schedules.
 
 I trained the model for 100 epochs.
 
@@ -172,16 +171,25 @@ For CIFAR-10, I used the same U-Net as in Ho's code (Figure 1).
 
 ### 7.2 Training setup
 
-I used the same training setup as for the MNIST dataset.
+I used the training setup the authors of the DDPM paper described in "*Appendix B: Experimental details*":
 
-I added random flips to increase image diversity, as mentioned in appendix "*B. Experimental details*" of the DDPM paper:
+- Timesteps: 1000
+- EMA decay factor: 0.9999
+- Data augmentation: random horizontal flips
+- Dropout rate: 0.1
+- Optimizer: Adam with learning rate 2e-4
+- Batch size: 128
 
+Like for MNIST, I used a cosine variance schedule rather than a linear schedule.
+
+In Appendix B, the authors mentioned the following:
 ```
-We used random horizontal flips during training for CIFAR10; we tried training both with 
-and without flips, and found flips to improve sample quality slightly.
+We used TPU v3-8 (similar to 8 V100 GPUs) for all experiments. Our CIFAR model trains at 21 steps per second at batch size 128 (10.6 hours to train to completion at 800k steps), and sampling a batch of 256 images takes 17 seconds.
 ```
 
-I trained the model for 150 epochs.
+There are 50,000 images in the training set of the CIFAR-10 dataset. With a batch size of 128, 800k steps require 2,048 epochs.
+
+I trained my model for only 1,000 epochs on an A100 GPU, which took ~13 hours (48sec / epoch).
 
 ### 7.3 Sampling
 
@@ -199,6 +207,16 @@ Figure 7 shows some image samples obtained using the DDIM sampling method. Examp
 ![](pictures/cifar10_ddim_samples.png)
 
 
+### 7.4 FID
+
+I used FID (Fréchet Inception Distance) to measure the similarity between the distributions of the CIFAR-10 dataset images and images generated with my model.
+
+I generated 60,000 images, the same number as in the CIFAR-10 dataset, using DDIM sampling with 100 steps and eta=0. 
+
+The authors of the DDPM got an FID value of 3.17 (Table 1). They trained their model for 800k steps, that is about 2,000 epochs with a batch size of 128.
+
+ I obtained an FID score of 11.3. As I only trained the model for 1,000 epochs, this score can be considered in line with the DDPM paper results.
+
 ## 8. Conclusion
 
 Reproducing the diffusion model from the landmark DDPM paper by Jonathan Ho et al. was a great way to gain an understanding of how diffusion models work, from the mathematical formulation of the forward and reverse processes to the implementation details of the U-Net architecture, timestep embeddings, ResNet blocks, and sampling procedures.
@@ -206,3 +224,20 @@ Reproducing the diffusion model from the landmark DDPM paper by Jonathan Ho et a
 The generated MNIST and CIFAR-10 samples showed that the models learned meaningful image distributions and were able to synthesize coherent images, although some samples exhibited hallucinations. DDIM sampling demonstrated a substantial runtime advantage over DDPM sampling, as expected.
 
 It was absolutely fascinating to observe images progressively emerging from noise during the reverse process!
+
+
+FID Score: 11.3014
+trained:
+batch_size = 32
+epochs = 150
+
+retrain:
+-------
+batch_size=128
+epochs = 500
+
+Steps per epoch = 50,000 / 128 = 390 steps
+Total steps = 390 × 500 = 195,000 steps
+
+Ho: 800k steps
+Still about 25% of the 800k steps from the paper. To hit 800k you'd need roughly 2,050 epochs with batch size 128.

@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 from datetime import timedelta
 import tensorflow as tf
 from diffusion_model import DiffusionModel
-from utils import print_trainable_variables, SaveCheckpoint
+from utils import print_trainable_variables, SaveWeightsCallback
 
 
 def create_data_loader(x, batch_size):
@@ -34,22 +34,22 @@ def train_model(output_dir):
     
     # Create data loader for training set images
     train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-    train_ds = create_data_loader(x_train, batch_size=32)
+    train_ds = create_data_loader(x_train, batch_size=128)
 
     # Create diffusion model
-    print('>> Creating diffusion model')
+    print(">> Creating diffusion model")
     model = DiffusionModel({
-        'u_net': {
-            'image_size': 32,
-            'image_channels': 3,
-            'base_channels': 128,
-            'channel_multiplier': (1, 2, 2, 2),
-            'num_resnet_blocks': 2,
-            'attn_resolutions': (16,),
-            'dropout_rate': 0.1
+        "u_net": {
+            "image_size": 32,
+            "image_channels": 3,
+            "base_channels": 128,
+            "channel_multiplier": (1, 2, 2, 2),
+            "num_resnet_blocks": 2,
+            "attn_resolutions": (16,),
+            "dropout_rate": 0.1
         },
-        'data_augment': {
-            'random_flip': True
+        "data_augment": {
+            "random_flip": True
         }
     })
     
@@ -59,66 +59,41 @@ def train_model(output_dir):
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    resume_from_epoch = 102
-
-    if resume_from_epoch > 0:
-        print('>> Resuming from epoch', resume_from_epoch)
-        print('checkpoints_dir:', checkpoints_dir)
-        checkpoints_dir = os.path.join(output_dir, f'checkpoints_{resume_from_epoch}')
-        if not os.path.isdir(checkpoints_dir):
-            raise ValueError("Can't find checkpoints directory", checkpoints_dir)
-
-        fn = os.path.join(checkpoints_dir, f'checkpoint_u_net_{resume_from_epoch}.keras')
-        model.u_net = tf.keras.models.load_model(fn)
-        print('Loaded', fn)
-
-        fn = os.path.join(checkpoints_dir, f'checkpoint_ema_net_{resume_from_epoch}.keras')
-        model.ema_net = tf.keras.models.load_model(fn)
-        print('>> Loaded', fn)
-
-    # Don't pass a loss function, the model handles it.
+    # Don"t pass a loss function, the model handles it.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
 
     # Set up callbacks
-    callbacks = [
-        SaveCheckpoint(
-            dirpath=os.path.join(output_dir, 'checkpoints'),
-            basename='checkpoint',
-            period=4,
-            offset=resume_from_epoch,
-            overwrite=True
-        ),
-        tf.keras.callbacks.CSVLogger(
-            filename=os.path.join(output_dir, 'metrics.csv')
-        )
-    ]
-
+    csv_logger = tf.keras.callbacks.CSVLogger(
+        filename=os.path.join(output_dir, "metrics.csv")
+    )
+    checkpoint_callback = SaveWeightsCallback(output_dir, period=50)
+    
     # Train model
-    print('>> Starting training')
+    print(">> Starting training")
     start_time = timer()
     model.fit(
         train_ds,
-        epochs=100,
-        callbacks=callbacks,
+        epochs=1000,
+        callbacks=[csv_logger, checkpoint_callback]
     )
     end_time = timer()
     train_run_time = int(end_time - start_time)
-    print('>> Training runtime: ' + str(timedelta(seconds=train_run_time))) 
+    print(">> Training runtime: " + str(timedelta(seconds=train_run_time))) 
 
     # Save the config file and the two models (U-Net and EMA)
-    model.save(os.path.join(output_dir, 'trained_model'), overwrite=True)
+    model.save(os.path.join(output_dir, "trained_model"), overwrite=True)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--output_dir',
-        help='Directory where to save training output files (model config, checkpoint, etc.)',
+        "--output_dir",
+        help="Directory where to save training output files (model config, checkpoint, etc.)",
         type=str,
-        default='./train_output'
+        default="./train_output"
     )
 
     args = parser.parse_args()
