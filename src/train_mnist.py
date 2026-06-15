@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 from datetime import timedelta
 import tensorflow as tf
 from diffusion_model import DiffusionModel
-from utils import print_trainable_variables, SaveCheckpoint
+from utils import print_trainable_variables
 
 
 def create_data_loader(x, batch_size):
@@ -53,6 +53,9 @@ def train_model(output_dir):
         }
     })
     
+    model.save("mnist")
+    exit()
+
     print_trainable_variables(model, params_only=True)
 
     # Create the output dir if it does not exist
@@ -66,12 +69,11 @@ def train_model(output_dir):
 
     # Set up callbacks
     callbacks = [
-        SaveCheckpoint(
-            dirpath=os.path.join(output_dir, "checkpoints"),
-            basename="checkpoint",
-            period=5,
-            overwrite=True
-        ),
+        # SaveWeightsCallback(
+        #     dirpath=os.path.join(output_dir, "checkpoints"),
+        #     period=5,
+        #     overwrite=True
+        # ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv")
         )

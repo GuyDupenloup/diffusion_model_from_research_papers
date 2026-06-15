@@ -45,7 +45,7 @@ class DiffusionModel(tf.keras.models.Model):
 
             # Moving average parameters for EMA network
             "ema": {
-                "decay": 0.999
+                "decay": 0.9999
             }
         }
 
@@ -83,7 +83,8 @@ class DiffusionModel(tf.keras.models.Model):
         )
         _ = self.u_net(dummy_data)
 
-        # Create EMA network
+        # Create the EMA model (easier than cloning the U-Net
+        # as it avoids model serialization issues)
         self.ema_net = UNet(
             image_size=image_size,
             image_channels=image_channels,
@@ -94,7 +95,6 @@ class DiffusionModel(tf.keras.models.Model):
             dropout_rate=cfg["dropout_rate"],
             name="ema_net"
         )
-        
         _ = self.ema_net(dummy_data)
         self.ema_net.set_weights(self.u_net.get_weights())
         self.ema_decay = self.model_config["ema"]["decay"]
@@ -122,7 +122,7 @@ class DiffusionModel(tf.keras.models.Model):
             "channel_multiplier": (1, 2, 2, 2),
             "num_resnet_blocks": 2,
             "attn_resolutions": (16,),
-            "dropout_rate": 0.0
+            "dropout_rate": 0.1
         }
 
         # Input images augmentation
@@ -140,7 +140,7 @@ class DiffusionModel(tf.keras.models.Model):
 
         # Moving average parameters for EMA network
         ema_defaults = {
-            "decay": 0.999
+            "decay": 0.9999
         }
 
         u_net = diffusion_cfg.get("u_net", {})
@@ -157,7 +157,8 @@ class DiffusionModel(tf.keras.models.Model):
 
         return config
 
-    def save(self, dirpath, overwrite=True):
+
+    def save(self, dirpath):
         """
         Saves the following files to a directory:
             - Model configuration:  "config.json"
@@ -171,8 +172,7 @@ class DiffusionModel(tf.keras.models.Model):
                        Otherwise, an error is raised.
         """
 
-        if not os.path.isdir(dirpath):
-            os.makedirs(dirpath, exist_ok=True)
+        os.makedirs(dirpath, exist_ok=True)
 
         # Save configuration to JSON file
         with open(os.path.join(dirpath, "config.json"), "w") as f:
@@ -270,17 +270,12 @@ class DiffusionModel(tf.keras.models.Model):
 
         return {m.name: m.result() for m in self.metrics}
 
-    def ddpm_sampling(self, num_samples):
-        """
-        Samples the EMA network using the method from the DDPM paper.
-        Argument `num_samples` is the number of samples to generate.
-        """
 
+    def ddpm_sampling(self, num_samples, keep_all_images=False):
         alphas = 1.0 - self.betas
         alphas_cumprod = tf.math.cumprod(alphas, axis=0)
         alphas_cumprod_prev = tf.concat([[1.0], alphas_cumprod[:-1]], axis=0)
         
-        # Precompute posterior coefficients (like Ho"s code)
         posterior_variance = (
             self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
         )
@@ -290,33 +285,38 @@ class DiffusionModel(tf.keras.models.Model):
         posterior_mean_coef2 = (
             (1.0 - alphas_cumprod_prev) * tf.sqrt(alphas) / (1.0 - alphas_cumprod)
         )
-
-        # Coefficients for predicting x_0 from noise
         sqrt_recip_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod)
         sqrt_recipm1_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod - 1.0)
-        
+    
         batch_shape = (num_samples,) + self.image_shape
         images = tf.random.normal(batch_shape)
-        
+
+        if keep_all_images:
+            H, W, C = self.image_shape
+            all_images = tf.zeros((self.timesteps, num_samples, H, W, C), dtype=tf.float32)
+
         for t in reversed(range(self.timesteps)):
-            
             t_tensor = tf.fill((num_samples,), t)
             predicted_noise = self.ema_net((images, t_tensor), training=False)
             
-            # Step 1: Predict x_0 from noise (like Ho"s predict_start_from_noise)
             x_recon = (
                 sqrt_recip_alphas_cumprod[t] * images - 
                 sqrt_recipm1_alphas_cumprod[t] * predicted_noise
             )
-            # x_recon = tf.clip_by_value(x_recon, -1.0, 1.0)
-            
-            # Step 2: Compute posterior mean (like Ho"s q_posterior)
+            # FIX 3: clamp x_recon to the model's valid range
+            x_recon = tf.clip_by_value(x_recon, -1.0, 1.0)
+
+            if keep_all_images:
+                # FIX 1: correct index so t=T-1 -> 0, t=0 -> T-1
+                store_idx = self.timesteps - 1 - t
+                x_recon_expanded = tf.expand_dims(x_recon, axis=0)
+                all_images = tf.tensor_scatter_nd_update(all_images, [[store_idx]], x_recon_expanded)
+
             model_mean = (
                 posterior_mean_coef1[t] * x_recon + 
                 posterior_mean_coef2[t] * images
             )
-            
-            # Step 3: Add noise (like Ho"s p_sample)
+        
             if t > 0:
                 noise = tf.random.normal(batch_shape)
                 model_log_variance = tf.math.log(posterior_variance[t])
@@ -324,9 +324,12 @@ class DiffusionModel(tf.keras.models.Model):
             else:
                 images = model_mean
         
-        images = tf.clip_by_value(images, 0.0, 1.0)
-
-        return images
+        if keep_all_images:
+            all_images = tf.transpose(all_images, perm=[1, 0, 2, 3, 4])
+            return all_images
+        else:
+            return images
+        
 
     def ddim_sampling(self, num_samples, num_steps=100, eta=0.0):
         """
@@ -390,7 +393,9 @@ class DiffusionModel(tf.keras.models.Model):
                 noise = tf.zeros(batch_shape)
 
             # DDIM update
-            dir_xt = tf.sqrt(1.0 - alpha_bar_prev) * eps
+            dir_xt = tf.sqrt(
+                1.0 - alpha_bar_prev - sigma**2
+            ) * eps
 
             images = (
                 tf.sqrt(alpha_bar_prev) * x0_pred +

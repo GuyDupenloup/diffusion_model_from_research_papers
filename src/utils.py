@@ -32,6 +32,9 @@ def load_diffusion_model(dirpath, ema_net_only=False):
     # Create the diffusion model
     model = DiffusionModel(config)
 
+    # Use dummy inputs to build the model
+
+    
     # Load U-Net weights
     if not ema_net_only:
         fn = os.path.join(dirpath, "u_net.weights.h5")

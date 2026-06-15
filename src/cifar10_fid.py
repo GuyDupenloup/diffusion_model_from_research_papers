@@ -1,6 +1,7 @@
 import time
 from datetime import timedelta
 import argparse
+import math
 import numpy as np
 import tensorflow as tf
 from scipy import linalg
@@ -24,20 +25,29 @@ def get_inception_activations(images, inception, batch_size=64):
 
     return inception.predict(dataset, verbose=1)
 
-
-def compute_fid(acts1, acts2):
+def compute_fid(acts1, acts2, eps=1e-6):
     mu1, sigma1 = acts1.mean(axis=0), np.cov(acts1, rowvar=False)
     mu2, sigma2 = acts2.mean(axis=0), np.cov(acts2, rowvar=False)
+
+    # Stabilize near-singular covariance matrices
+    sigma1 += np.eye(sigma1.shape[0]) * eps
+    sigma2 += np.eye(sigma2.shape[0]) * eps
 
     diff = mu1 - mu2
     covmean, _ = linalg.sqrtm(sigma1 @ sigma2, disp=False)
 
     if np.iscomplexobj(covmean):
+        if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
+            raise ValueError(
+                f"Imaginary component in sqrtm result is too large "
+                f"(max={np.abs(np.diagonal(covmean).imag).max():.4f}). "
+                f"This usually means the covariance matrix is severely ill-conditioned. "
+                f"Try using more samples (at least 2048)."
+            )
         covmean = covmean.real
 
     fid = diff @ diff + np.trace(sigma1 + sigma2 - 2 * covmean)
     return float(fid)
-
 
 def evaluate_cifar10_fid(
     model_dir,
@@ -45,28 +55,38 @@ def evaluate_cifar10_fid(
     num_steps=100,
     eta=0
 ):
+    """
+    Evaluate FID score
+    """
 
     # Load the model
     print(f"Loading diffusion model from directory {model_dir}")
     model = load_diffusion_model(model_dir, ema_net_only=True)
 
     # Get the CIFAR-10 dataset images
-    (x_train, _), (x_test, _) = tf.keras.datasets.cifar10.load_data()
-    real_images = np.concatenate([x_train, x_test], axis=0) 
-    num_images = real_images.shape[0]
+    (x_train, _), _ = tf.keras.datasets.cifar10.load_data()
+
+    # Rescale the images from [0, 255] to [-1, 1]
+    real_images = real_images.astype(np.float32)/127.5 - 1
+    real_images = np.clip(real_images, -1, 1)
 
     # Generate the same number of images
-    print(f"\nGenerating {num_images} images")
+    num_images = real_images.shape[0]
+
+    print(f"\nGenerating {num_images} images using num_steps={num_steps} and eta={eta}")
     start_time = time.time()
 
     gen_images = []
-    num_batches = -(-num_images // sampling_batch_size)  # ceiling division
+    num_batches = math.ceil(num_images / sampling_batch_size)
+
     for i in range(num_batches):
+        print(f"batch {i+1}/{num_batches}")
+
         current_batch_size = min(sampling_batch_size, num_images - i * sampling_batch_size)
         img = model.ddim_sampling(current_batch_size, num_steps=num_steps, eta=eta)
         gen_images.append(img.numpy())
 
-    gen_images = np.concatenate(gen_images, axis=0)[:num_images]
+    gen_images = np.concatenate(gen_images, axis=0)
 
     elapsed = time.time() - start_time
     print(f"Generation time: {str(timedelta(seconds=int(elapsed)))}")
@@ -109,13 +129,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--num_steps",
-        help="DDIM number of steps parameter",
+        help="DDIM number of steps",
         type=int,
         default=100
     )
     parser.add_argument(
         "--eta",
-        help="DDIM eta parameter",
+        help="DDIM eta",
         type=float,
         default=0
     )

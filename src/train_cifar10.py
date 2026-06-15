@@ -53,13 +53,16 @@ def train_model(output_dir):
         }
     })
     
+    model.save("mnist")
+    exit()
+    
     print_trainable_variables(model, params_only=True)
 
     # Create the output dir if it does not exist
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
-    # Don"t pass a loss function, the model handles it.
+    # Loss and metrics are calculated by the model.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
@@ -75,7 +78,7 @@ def train_model(output_dir):
     start_time = timer()
     model.fit(
         train_ds,
-        epochs=1000,
+        epochs=2000,
         callbacks=[csv_logger, checkpoint_callback]
     )
     end_time = timer()
