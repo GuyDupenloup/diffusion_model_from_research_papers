@@ -272,6 +272,7 @@ class DiffusionModel(tf.keras.models.Model):
 
 
     def ddpm_sampling(self, num_samples, keep_all_images=False):
+        
         alphas = 1.0 - self.betas
         alphas_cumprod = tf.math.cumprod(alphas, axis=0)
         alphas_cumprod_prev = tf.concat([[1.0], alphas_cumprod[:-1]], axis=0)
@@ -304,13 +305,7 @@ class DiffusionModel(tf.keras.models.Model):
                 sqrt_recipm1_alphas_cumprod[t] * predicted_noise
             )
             # FIX 3: clamp x_recon to the model's valid range
-            x_recon = tf.clip_by_value(x_recon, -1.0, 1.0)
-
-            if keep_all_images:
-                # FIX 1: correct index so t=T-1 -> 0, t=0 -> T-1
-                store_idx = self.timesteps - 1 - t
-                x_recon_expanded = tf.expand_dims(x_recon, axis=0)
-                all_images = tf.tensor_scatter_nd_update(all_images, [[store_idx]], x_recon_expanded)
+            x_recon = tf.clip_by_value(x_recon, -1, 1)
 
             model_mean = (
                 posterior_mean_coef1[t] * x_recon + 
@@ -324,9 +319,14 @@ class DiffusionModel(tf.keras.models.Model):
             else:
                 images = model_mean
         
+            if keep_all_images:
+                images_expanded = tf.expand_dims(images, axis=0)
+                all_images = tf.tensor_scatter_nd_update(
+                    all_images, [[self.timesteps]], images_expanded
+                )
+
         if keep_all_images:
-            all_images = tf.transpose(all_images, perm=[1, 0, 2, 3, 4])
-            return all_images
+            return tf.transpose(all_images, perm=[1, 0, 2, 3, 4])
         else:
             return images
         
@@ -379,7 +379,8 @@ class DiffusionModel(tf.keras.models.Model):
             x0_pred = (
                 images - tf.sqrt(1.0 - alpha_bar_t) * eps
             ) / tf.sqrt(alpha_bar_t)
-            x0_pred = tf.clip_by_value(x0_pred, -1.0, 1.0)
+
+            x0_pred = tf.clip_by_value(x0_pred, -1, 1)
 
             # Compute sigma (stochasticity)
             if i < num_steps - 1:

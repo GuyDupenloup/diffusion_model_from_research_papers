@@ -6,6 +6,7 @@ import json
 from tabulate import tabulate
 import numpy as np
 import tensorflow as tf
+from scipy import linalg
 from diffusion_model import DiffusionModel
 
 

@@ -7,17 +7,17 @@ from timeit import default_timer as timer
 from datetime import timedelta
 import tensorflow as tf
 from diffusion_model import DiffusionModel
-from utils import print_trainable_variables
+from utils import print_trainable_variables, SaveWeightsCallback
 
 
 def create_data_loader(x, batch_size):
     """
-    Creates a tf.data.Dataset to load images (labels are discarded)
-    Rescales from [0, 255] to [0.0, 1.0]
-    Pads from 28 x 28 to 32 x 32
+    Creates a tf.data.Dataset to load MNIST images (labels are discarded)
+    Rescales from [0, 255] to [-1.0, 1.0]
+    Pads images from 28 x 28 to 32 x 32
     """
     def preprocess(x):
-        x = tf.cast(x, tf.float32)/255.0
+        x = tf.cast(x, tf.float32)/127.5 - 1.0
         x = tf.pad(x, [[2, 2], [2, 2]], "CONSTANT")
         x = tf.expand_dims(x, axis=-1)
         return x
@@ -30,7 +30,10 @@ def create_data_loader(x, batch_size):
     return ds
 
 
-def train_model(output_dir):
+def train_model(output_dir, epochs):
+
+    # Create the output directory
+    os.makedirs(output_dir, exist_ok=True)
 
     # Load CIFAR-10
     (x_train, y_train), _ = tf.keras.datasets.mnist.load_data()
@@ -52,28 +55,20 @@ def train_model(output_dir):
             "dropout_rate": 0.1
         }
     })
-    
-    model.save("mnist")
-    exit()
 
     print_trainable_variables(model, params_only=True)
 
-    # Create the output dir if it does not exist
-    if not os.path.isdir(output_dir):
-        os.mkdir(output_dir)
-
-    # Don"t pass a loss function, the model handles it.
+    # The model handles loss function and metrics.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
 
     # Set up callbacks
     callbacks = [
-        # SaveWeightsCallback(
-        #     dirpath=os.path.join(output_dir, "checkpoints"),
-        #     period=5,
-        #     overwrite=True
-        # ),
+        SaveWeightsCallback(
+            dirpath=os.path.join(output_dir, "checkpoints"),
+            period=50
+        ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv")
         )
@@ -84,8 +79,8 @@ def train_model(output_dir):
     start_time = timer()
     model.fit(
         train_ds,
-        epochs=1,
-        callbacks=callbacks,
+        epochs=epochs,
+        callbacks=callbacks
     )
     end_time = timer()
     train_run_time = int(end_time - start_time)
@@ -98,12 +93,19 @@ def train_model(output_dir):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    
     parser.add_argument(
         "--output_dir",
-        help="Directory where to save training output files (model config, checkpoint, etc.)",
-        type=str,
-        default="./train_output"
+        help="Directory where to save training output files",
+        required=True,
+        type=str
+    )   
+    parser.add_argument(
+        "--epochs",
+        help="Number of training epochs",
+        required=True,
+        type=str
     )
 
     args = parser.parse_args()
-    train_model(args.output_dir)
+    train_model(args.output_dir, args.epochs)

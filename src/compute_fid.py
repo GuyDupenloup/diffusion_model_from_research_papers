@@ -1,19 +1,23 @@
 import time
 from datetime import timedelta
-import argparse
 import math
+import random
+import argparse
 import numpy as np
 import tensorflow as tf
-from scipy import linalg
 from utils import load_diffusion_model
 
 
 def get_inception_activations(images, inception, batch_size=64):
     """Returns (N, 2048) pool3 features from Inception v3."""
     def preprocess(x):
-        x = tf.image.resize(tf.cast(x, tf.float32), [299, 299])
+        x = tf.cast(x, tf.float32)
+        # Convert grayscale to RGB by repeating the channel 3 times
+        if x.shape[-1] == 1:
+            x = tf.repeat(x, 3, axis=-1)
+        x = tf.image.resize(x, [299, 299])
         x = tf.keras.applications.inception_v3.preprocess_input(x)
-        x.set_shape([299, 299, 3])  # restore shape info for Keras
+        x.set_shape([299, 299, 3])
         return x
 
     dataset = (
@@ -25,7 +29,8 @@ def get_inception_activations(images, inception, batch_size=64):
 
     return inception.predict(dataset, verbose=1)
 
-def compute_fid(acts1, acts2, eps=1e-6):
+
+def compute_acts_fid(acts1, acts2, eps=1e-6):
     mu1, sigma1 = acts1.mean(axis=0), np.cov(acts1, rowvar=False)
     mu2, sigma2 = acts2.mean(axis=0), np.cov(acts2, rowvar=False)
 
@@ -39,9 +44,7 @@ def compute_fid(acts1, acts2, eps=1e-6):
     if np.iscomplexobj(covmean):
         if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
             raise ValueError(
-                f"Imaginary component in sqrtm result is too large "
-                f"(max={np.abs(np.diagonal(covmean).imag).max():.4f}). "
-                f"This usually means the covariance matrix is severely ill-conditioned. "
+                f"Imaginary component in sqrtm result is too large.\n"
                 f"Try using more samples (at least 2048)."
             )
         covmean = covmean.real
@@ -49,41 +52,47 @@ def compute_fid(acts1, acts2, eps=1e-6):
     fid = diff @ diff + np.trace(sigma1 + sigma2 - 2 * covmean)
     return float(fid)
 
-def evaluate_cifar10_fid(
-    model_dir,
-    sampling_batch_size,
-    num_steps=100,
-    eta=0
-):
+
+def compute_distributions_fid(dataset, model_dir, num_steps, num_images=None):
     """
     Evaluate FID score
     """
 
+    if dataset not in ("mnist", "cifar10"):
+        raise ValueError("The dataset name should be 'mnist' or 'cifar10'")
+    
     # Load the model
     print(f"Loading diffusion model from directory {model_dir}")
     model = load_diffusion_model(model_dir, ema_net_only=True)
 
-    # Get the CIFAR-10 dataset images
-    (x_train, _), _ = tf.keras.datasets.cifar10.load_data()
+    # Get the training set images
+    if dataset == "mnist":
+        (real_images, _), _ = tf.keras.datasets.mnist.load_data()
+    else:
+        (real_images, _), _ = tf.keras.datasets.cifar10.load_data()
 
-    # Rescale the images from [0, 255] to [-1, 1]
-    real_images = real_images.astype(np.float32)/127.5 - 1
-    real_images = np.clip(real_images, -1, 1)
+    if num_images is not None:
+        random.shuffle(real_images)
+        real_images = real_images[:num_images]
+    else:
+        num_images = real_images.shape[0]
 
-    # Generate the same number of images
-    num_images = real_images.shape[0]
+    print(f"\nGenerating {num_images} images using {num_steps} steps")
 
-    print(f"\nGenerating {num_images} images using num_steps={num_steps} and eta={eta}")
+    batch_size = 500
+    num_batches = math.ceil(num_images / batch_size)
+
     start_time = time.time()
-
     gen_images = []
-    num_batches = math.ceil(num_images / sampling_batch_size)
-
     for i in range(num_batches):
         print(f"batch {i+1}/{num_batches}")
 
-        current_batch_size = min(sampling_batch_size, num_images - i * sampling_batch_size)
-        img = model.ddim_sampling(current_batch_size, num_steps=num_steps, eta=eta)
+        current_batch_size = min(batch_size, num_images - i*batch_size)
+        img = model.ddim_sampling(
+            current_batch_size,
+            num_steps=num_steps,
+            eta=0
+        )
         gen_images.append(img.numpy())
 
     gen_images = np.concatenate(gen_images, axis=0)
@@ -91,8 +100,11 @@ def evaluate_cifar10_fid(
     elapsed = time.time() - start_time
     print(f"Generation time: {str(timedelta(seconds=int(elapsed)))}")
 
-    # Rescale the generated images from [-1, 1] to [0, 255]
-    gen_images = (gen_images + 1) * 127.5
+    # Rescale the generated images
+    if dataset == "mnist":
+        gen_images = gen_images * 255
+    else:
+        gen_images = (gen_images + 1) * 127.5
     gen_images = gen_images.clip(0, 255).astype(np.uint8)
 
     inception = tf.keras.applications.InceptionV3(
@@ -104,9 +116,9 @@ def evaluate_cifar10_fid(
     print("Extracting activations for generated images")
     gen_acts = get_inception_activations(gen_images, inception)
 
-    fid_score = compute_fid(real_acts, gen_acts)
+    fid_score = compute_acts_fid(real_acts, gen_acts)
 
-    print("\nFID score:", fid_score)
+    print(f"\n\nFID score: {fid_score:.2f}")
 
     return fid_score
 
@@ -116,35 +128,34 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument(
-        "--model_dir",
-        help="Directory where the diffusion model files are",
+        "--dataset",
+        help="Dataset name, either 'mnist' or 'cifar10'",
         required=True,
         type=str
-    )    
+    )
     parser.add_argument(
-        "--sampling_batch_size",
-        help="Number of images generated at once",
-        type=int,
-        default=250
+        "--model_dir",
+        help="Directory where the diffusion model files are (config, weights)",
+        required=True,
+        type=str
     )
     parser.add_argument(
         "--num_steps",
-        help="DDIM number of steps",
-        type=int,
-        default=100
+        help="Number of DDIM steps",
+        required=True,
+        type=int
     )
     parser.add_argument(
-        "--eta",
-        help="DDIM eta",
-        type=float,
-        default=0
+        "--num_images",
+        help="Number of generated images",
+        type=int
     )
 
     args = parser.parse_args()
 
-    evaluate_cifar10_fid(
+    _ = compute_distributions_fid(
+        args.dataset,
         args.model_dir,
-        args.sampling_batch_size,
         args.num_steps,
-        eta=0
+        args.num_images
     )
