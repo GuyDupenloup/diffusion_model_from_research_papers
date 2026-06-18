@@ -188,13 +188,15 @@ These are not good FID scores, but they clearly are a consequence of the small U
 
 ### 7.1 U-Net
 
-For my CIFAR-10 diffusion model, I used the same U-Net as in Ho's code (Figure 1).
+I used the same U-Net as in Ho's code (Figure 1).
 
 ### 7.2 Training setup
 
-The training setup is described in appendix B "Experimental results" of the DDPM paper.
+For training, I used the setup described in appendix B "Experimental results" of the DDPM paper.
 
-I used the same setup for my MNIST model.
+This is the same setup I used for MNIST, with the addition of random horizontal flips to increase image diversity.
+
+Runtime on an A100 GPU is 48sec/epoch (~13 hours for 1000 epochs).
 
 ### 7.3 Sampling
 
@@ -218,7 +220,7 @@ Examples of generative hallucinations are shown on the last row of images:
 
 Ho et al. trained their model for 800k optimization steps (2,048 epochs with batch size 128) and reported an FID of 3.17 using 1,000-step DDPM sampling.
 
-My implementation differs in two ways that preclude direct comparison: I use a cosine variance schedule instead of linear, and DDIM instead of DDPM sampling.
+My implementation differs in two ways that preclude direct comparison: I used a cosine variance schedule instead of linear, and DDIM instead of DDPM sampling.
 
 Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as the reference distribution, and generated the same number of images using DDIM sampling to compute FID scores. The results I obtained are summarized in the table below.
 
@@ -234,6 +236,7 @@ Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as
 |       1000        |      100      |       7.24     |
 |       1000        |      200      |       5.71     |
 |       2000        |      100      |       7.73     |
+|       2000        |      200      |       7.23     |
 
 
 The FID score reaches its minimum after approximately 500 epochs, corresponding to about 195k optimization steps. Beyond this point, image quality gradually deteriorates, even though the training loss continues to decrease. This behavior may originate from the replacement of the linear schedule by a cosine schedule, given that Ho et al. explicitly optimized their U-Net, hyperparameters and training setup for a linear schedule. But further experiments would be required to confirm it.
@@ -241,6 +244,9 @@ The FID score reaches its minimum after approximately 500 epochs, corresponding 
 Increasing the number of DDIM sampling steps significantly improves sample quality, as observed with the model trained for 1,000 epochs. This behavior is expected, since a larger number of reverse diffusion steps yields a more accurate approximation of the underlying generative process.
 
 I did not evaluate DDPM sampling because of its substantially higher computational cost. Since the original DDPM algorithm uses 1,000 denoising steps, DDIM sampling is approximately 10x faster with 100 steps and 5x faster with 200 steps (the computational cost is dominated by the number of forward passes through the model).
+
+The DDIM sampling runtime on an A100 GPU is 2h30min for 50,000 images using 200 steps, which is about 0.18 sec / image. Sampling with DDPM would take approximately 12.5 hours.
+
 
 ## 8. Conclusion
 

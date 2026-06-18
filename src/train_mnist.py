@@ -66,7 +66,7 @@ def train_model(output_dir, epochs):
     # Set up callbacks
     callbacks = [
         SaveWeightsCallback(
-            dirpath=os.path.join(output_dir, "checkpoints"),
+            os.path.join(output_dir, "checkpoints"),
             period=50
         ),
         tf.keras.callbacks.CSVLogger(
@@ -87,16 +87,18 @@ def train_model(output_dir, epochs):
     print(">> Training runtime: " + str(timedelta(seconds=train_run_time))) 
 
     # Save the config file and the two models (U-Net and EMA)
-    model.save(os.path.join(output_dir, "trained_model"), overwrite=True)
+    model.save(os.path.join(output_dir, "trained_model"))
 
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    
+    parser = argparse.ArgumentParser(
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+        
     parser.add_argument(
         "--output_dir",
-        help="Directory where to save training output files",
+        help="Directory where to save training output files (model config, trained weights)",
         required=True,
         type=str
     )   

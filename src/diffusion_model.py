@@ -4,6 +4,7 @@
 import os
 import math
 import json
+import numpy as np
 import tensorflow as tf
 from u_net import UNet
 
@@ -272,7 +273,7 @@ class DiffusionModel(tf.keras.models.Model):
 
 
     def ddpm_sampling(self, num_samples, keep_all_images=False):
-        
+
         alphas = 1.0 - self.betas
         alphas_cumprod = tf.math.cumprod(alphas, axis=0)
         alphas_cumprod_prev = tf.concat([[1.0], alphas_cumprod[:-1]], axis=0)
@@ -322,7 +323,7 @@ class DiffusionModel(tf.keras.models.Model):
             if keep_all_images:
                 images_expanded = tf.expand_dims(images, axis=0)
                 all_images = tf.tensor_scatter_nd_update(
-                    all_images, [[self.timesteps]], images_expanded
+                    all_images, [[t]], images_expanded
                 )
 
         if keep_all_images:
