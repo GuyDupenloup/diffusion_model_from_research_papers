@@ -84,15 +84,10 @@ def sample_and_view_images(
     print(f"\nGenerating {num_images} images using {method} sampling method")
 
     if method == "ddpm":
-        # images = model.ddpm_sampling(num_images, keep_all_images=True)
-        # np.save("ddpm.npy", images)
-        # exit()
+        images = model.ddpm_sampling(num_images, keep_all_images=True)
 
         # Rescale generated images from [-1, 1] to [0, 1] for matplotlib
-        # images = (images.numpy() + 1) / 2.0
-
-        images = np.load("ddpm.npy")
-        images = (images + 1) / 2.0
+        images = (images.numpy() + 1) / 2.0
         images = np.clip(images, 0, 1)
 
         batch_size = 8  # Display 8 x timesteps grid of images
@@ -108,7 +103,7 @@ def sample_and_view_images(
 
         batch_size = 64   # Display 8x8 grid of images
         for i in range(0, len(images), batch_size):
-            display_ddim_images(images[i:i+batch_size],rows=8,cols=8)
+            display_ddim_images(images[i:i+batch_size])
 
 
 if __name__ == "__main__":
