@@ -213,7 +213,7 @@ Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as
 |       2000        |      200      |       7.23     |
 
 
-The FID score reaches its minimum after approximately 500 epochs, corresponding to ~195k optimization steps. Beyond this point, image quality gradually deteriorates, even though the training loss continues to decrease. This behavior may originate from the replacement of the linear schedule by a cosine schedule, given that Ho et al. optimized their hyperparameters and training setup for a linear schedule. But further experiments would be required to confirm it.
+The FID score reaches its minimum after approximately 500 epochs, corresponding to ~195k optimization steps. Beyond this point, image quality no longer improves, even though the training loss continues to decrease. This behavior may originate from the replacement of the linear schedule by a cosine schedule, given that Ho et al. optimized their hyperparameters and training setup for a linear schedule. But further experiments would be required to confirm it.
 
 Increasing the number of DDIM sampling steps significantly improves sample quality, as observed with the model trained for 1,000 epochs. This behavior is expected, since a larger number of reverse diffusion steps yields a more accurate approximation of the underlying generative process.
 
