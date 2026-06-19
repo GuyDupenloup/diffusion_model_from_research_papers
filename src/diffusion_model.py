@@ -12,13 +12,13 @@ from u_net import UNet
 class DiffusionModel(tf.keras.models.Model):
     """
     Diffusion model, including methods to:
-        - Create the U-Net and EMA network
+        - Create the U-Net and EMA networks
         - Train the U-Net and update the EMA network
-        - Save the configuration, U-Net and EMA network to files
-        - Train the U-Net and update weights of the EMA network
+        - Save the configuration, U-Net and EMA weights to files
         - Sample the EMA model using DDPM and DDIM sampling methods
 
-    The model configuration is passed as a dictionary, as shown below with default parameters:
+    The model configuration is passed as a dictionary, as shown below 
+    with the default parameter values:
         {
             # U-Net configuration parameters
             "u_net": {
@@ -163,14 +163,17 @@ class DiffusionModel(tf.keras.models.Model):
         """
         Saves the following files to a directory:
             - Model configuration:  "config.json"
-            - U-net model:  "u_net.keras"
-            - EMA network:  "ema_net.keras"
-        The diffusion model can be recreated from these files.
+            - U-net model weights:  "u_net.weights.h5"
+            - EMA model weights:  "ema_net.weights.h5"
+
+        The diffusion model can be recreated from these three files.
+
+        The directory is created if it does not exist. If it does and 
+        contains files with the names used to save the model, they 
+        will be overwritten.
 
         Arguments:
             dirpath (str): Path to the directory where to save files.
-            overwrite (bool): If True, the directory is overwritten if it already exists.
-                       Otherwise, an error is raised.
         """
 
         os.makedirs(dirpath, exist_ok=True)
@@ -192,7 +195,7 @@ class DiffusionModel(tf.keras.models.Model):
 
         Arguments:
             timesteps (int): Number of diffusion steps.
-            s (float): offset that control the starting point (shifts the cosine)
+            s (float): Offset that control the starting point (shifts the cosine)
             and curvature of the cosine.
             beta_min, beta_max (floats): Valid beta value range (used for clipping).
         """
@@ -218,7 +221,7 @@ class DiffusionModel(tf.keras.models.Model):
         
     def update_ema_weights(self):
         """
-        Gets the weights from the U-Net and update EMA"s moving average.
+        Gets the weights from the U-Net and update EMA's moving averages.
         """
 
         # Linearly interpolate between online weights and EMA weights
@@ -273,6 +276,24 @@ class DiffusionModel(tf.keras.models.Model):
 
 
     def ddpm_sampling(self, num_samples, keep_all_images=False):
+        """
+        Samples the EMA network using the method from the DDPM paper.
+
+        Arguments:
+            num_samples (integer):
+                Number of samples to generate.
+            keep_all_images (boolean):
+                If False:
+                    Only the last images of the denoising process (t=0) are kept.
+                If True:
+                    All the images of the denoising process (t=T to t=0) are kept.
+
+        Returns:
+            Sampled images.
+            If `keep_all_images` is:
+                False: returns a tensor with shape (batch, H, W, C).            
+                True: returns a tensor with shape (batch, T, H, W, C).
+        """
 
         alphas = 1.0 - self.betas
         alphas_cumprod = tf.math.cumprod(alphas, axis=0)
@@ -337,12 +358,15 @@ class DiffusionModel(tf.keras.models.Model):
         Samples the EMA network using the method from the DDIM paper.
 
         Arguments:
-            num_samples (int): Number of samples to generate.
-            num_steps (int): Number of timesteps used during the reverse diffusion process.
+            num_samples (integer):
+                Number of samples to generate.
+            num_steps (integer):
+                Number of timesteps used during the reverse diffusion process.
             eta (float):
-                - Controls the stochasticity of the sampling process.
-                - If `eta` = 0.0, the process is purely deterministic. If `eta` > 0.0, it becomes
-                  stochastic (more diverse but potentially less stable results).
+                Controls the stochasticity of the sampling process:
+                    - eta = 0: purely deterministic
+                    - eta > 0: some stochasticity
+                    - eta = 1: same behavior as DDPM sampling
         """
 
         batch_shape = (num_samples,) + self.image_shape

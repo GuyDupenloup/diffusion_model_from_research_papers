@@ -10,7 +10,26 @@ from utils import load_diffusion_model
 
 
 def get_inception_activations(images, inception, batch_size=64):
-    """Returns (N, 2048) pool3 features from Inception v3."""
+    """
+    Returns (N, 2048) pool3 features from Inception v3.
+ 
+    Preprocesses the input images (resizing, channel conversion, normalization)
+    and runs them through the Inception v3 model to extract pooled activations.
+ 
+    Args:
+        images:
+            Array of images with shape (N, H, W, C), uint8 or float.
+            Grayscale images (C=1) are automatically converted to RGB.
+        inception:
+            A Keras Inception v3 model with `include_top=False` and
+            `pooling='avg'`, returning (N, 2048) activations.
+        batch_size (int):
+            Number of images to process per batch. Defaults to 64.
+ 
+    Returns:
+        Numpy array of shape (N, 2048) containing the pool3 activations.
+    """
+
     def preprocess(x):
         x = tf.cast(x, tf.float32)
         # Convert grayscale to RGB by repeating the channel 3 times
@@ -32,6 +51,33 @@ def get_inception_activations(images, inception, batch_size=64):
 
 
 def compute_acts_fid(acts1, acts2, eps=1e-6):
+    """
+    Computes the Fréchet Inception Distance (FID) between two sets of activations.
+ 
+    FID measures the similarity between two distributions of Inception v3
+    activations by fitting multivariate Gaussians and computing the Fréchet
+    distance between them. Lower scores indicate greater similarity.
+ 
+    Args:
+        acts1:
+            Numpy array of shape (N, D) containing activations for the
+            first set of images (e.g. real images).
+        acts2:
+            Numpy array of shape (N, D) containing activations for the
+            second set of images (e.g. generated images).
+        eps:
+            Small value added to the diagonal of each covariance matrix
+            for numerical stability. Defaults to 1e-6.
+ 
+    Returns:
+        FID score as a Python float. Lower is better.
+ 
+    Raises:
+        ValueError: If the matrix square root produces an imaginary component
+            that exceeds the tolerance threshold, which typically indicates
+            too few samples were provided (at least 2048 are recommended).
+    """
+        
     mu1, sigma1 = acts1.mean(axis=0), np.cov(acts1, rowvar=False)
     mu2, sigma2 = acts2.mean(axis=0), np.cov(acts2, rowvar=False)
 
@@ -56,7 +102,28 @@ def compute_acts_fid(acts1, acts2, eps=1e-6):
 
 def compute_fid_score(model, real_images, num_steps, batch_size, eta):
     """
-    Evaluate FID score
+    Generates images with the diffusion model and computes the FID score.
+ 
+    Samples a batch of images from the diffusion model using DDIM, then
+    computes the FID score against the provided real images by extracting
+    Inception v3 activations from both sets and comparing their distributions.
+ 
+    Args:
+        model:
+            Keras diffusion model. Returns images in the range [-1, 1].
+        real_images:
+            NumPy array of shape (N, H, W, C) containing real images
+            in the range [0, 255] (uint8).
+        num_steps (int):
+            Number of DDIM denoising steps to use during generation.
+        batch_size (int):
+            Sampling batch size (number of images generated per sampling).
+        eta (float):
+            DDIM eta parameter. Fully deterministic sampling if eta=0, 
+            DDPM-like if eta=1.
+ 
+    Returns:
+        FID score as a Python float. Lower is better.
     """
 
     num_images = real_images.shape[0]
@@ -109,12 +176,35 @@ def compute_fid_score(model, real_images, num_steps, batch_size, eta):
 def main(
     dataset,
     model_dir,
+    num_images=10000,
     num_steps=100,
-    num_images=50000,
-    batch_size=500,
-    eta=0
+    eta=0,
+    batch_size=500
 ):
-    
+    """
+    Loads a trained diffusion model and evaluates its FID score on a dataset.
+ 
+    Loads the model from the given directory, fetches the training set of the
+    specified dataset, optionally subsamples it, and computes the FID score
+    between real and generated images.
+ 
+    Arguments:
+        dataset (str):
+            Name of the dataset to evaluate against, either 'mnist' or 'cifar10'.
+        model_dir (str):
+            Path to the directory where the model files are (config, weights).
+        num_images (int):
+            Number of real and generated images to use when computing the FID score.
+            Defaults to 10000.
+        num_steps (int):
+            Number of DDIM denoising steps. Defaults to 100.
+        eta (float):
+            DDIM eta parameter. Fully deterministic sampling if eta=0, DDPM-like
+            if eta=1. Defaults to 0.
+        batch_size (int):
+            Sampling batch size (number of images generated per sampling). Defaults to 500.
+    """
+
     if dataset not in ("mnist", "cifar10"):
         raise ValueError("The dataset name should be 'mnist' or 'cifar10'")
     
@@ -144,23 +234,56 @@ def main(
     print(f"\n\nFID score: {fid_score:.2f}")
 
 
-from google.colab import drive
-drive.mount("/content/drive")
+if __name__ == "__main__":
 
-main(
-    dataset="mnist",
-    model_dir="/content/drive/MyDrive/mnist/checkpoints/epoch_500",
-    num_steps=100,
-    num_images=10000,
-    batch_size=500,
-    eta=0
-)
+    parser = argparse.ArgumentParser(
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+        
+    parser.add_argument(
+        "--dataset",
+        help="Dataset name, either 'mnist' or 'cifar10'",
+        required=True,
+        type=str
+    )   
+    parser.add_argument(
+        "--model_dir",
+        help="Directory where the model files are (config, weights)",
+        required=True,
+        type=str
+    )
+    parser.add_argument(
+        "--num_images",
+        help="Number of real/generated images used to compute FID score",
+        type=int,
+        default=10000
+    )
+    parser.add_argument(
+        "--num_steps",
+        help="Number of DDIM steps",
+        type=int,
+        default=100
+    )
+    parser.add_argument(
+        "--eta",
+        help="DDIM eta parameter (deterministic if 0)",
+        type=float,
+        default=0
+    )
+    parser.add_argument(
+        "--batch_size",
+        help="Model sampling batch size",
+        type=int,
+        default=500
+    )
 
-# main(
-#     dataset="cifar10",
-#     model_dir="/content/drive/MyDrive/cifar10/checkpoints/epoch_500",
-#     num_steps=100,
-#     num_images=50000,
-#     batch_size=500,
-#     eta=0
-# )
+    args = parser.parse_args()
+
+    main(
+        args.dataset,
+        args.model_dir,
+        num_images=args.num_images,
+        num_steps=args.num_steps,
+        eta=args.eta,
+        batch_size=args.batch_size
+    )
