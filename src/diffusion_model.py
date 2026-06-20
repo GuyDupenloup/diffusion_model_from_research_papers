@@ -162,7 +162,7 @@ class DiffusionModel(tf.keras.models.Model):
     def save(self, dirpath):
         """
         Saves the following files to a directory:
-            - Model configuration:  "config.json"
+            - Model configuration:  "model_config.json"
             - U-net model weights:  "u_net.weights.h5"
             - EMA model weights:  "ema_net.weights.h5"
 
@@ -179,7 +179,7 @@ class DiffusionModel(tf.keras.models.Model):
         os.makedirs(dirpath, exist_ok=True)
 
         # Save configuration to JSON file
-        with open(os.path.join(dirpath, "config.json"), "w") as f:
+        with open(os.path.join(dirpath, "model_config.json"), "w") as f:
             json.dump(self.model_config, f, indent=4)
 
         # Save the weights of the U-Net

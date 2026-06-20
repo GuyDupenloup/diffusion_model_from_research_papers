@@ -194,14 +194,14 @@ Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as
 |  Training epochs  |  100 steps  |  200 steps  |
 |-------------------|-------------|-------------|
 |        150        |     11.3    |             |
-|        400        |     7.73    |             |
+|        400        |     8.73    |             |
 |        500        |     6.72    |    5.71     |
 |        550        |     6.89    |    6.34     |
-|        600        |     6.97    |             |
-|        700        |     7.01    |             |
+|        600        |     6.91    |             |
+|        700        |     7.05    |             |
 |        900        |     7.14    |             |
-|        1000       |     8.96    |    7.24     | 
-|        2000       |     7.73    |    7.23     |
+|        1000       |     7.01    |    6.68     | 
+|        2000       |     7.12    |    6.92     |
 
 
 The FID score reaches its minimum after approximately 500 epochs, corresponding to ~195k optimization steps. Beyond this point, image quality no longer improves, and deteriorates, although the training loss continues to decrease. This behavior may originate from the replacement of the linear schedule by a cosine schedule, given that Ho et al. optimized their hyperparameters and training setup for a linear schedule. But further experiments would be required to confirm it.

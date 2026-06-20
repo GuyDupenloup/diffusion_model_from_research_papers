@@ -3,11 +3,13 @@
 
 import os
 import argparse
+import json
 from timeit import default_timer as timer
 from datetime import timedelta
+import numpy as np
 import tensorflow as tf
 from diffusion_model import DiffusionModel
-from utils import print_trainable_variables, SaveWeightsCallback
+from utils import print_trainable_variables, SaveCheckpointCallback
 
 
 def create_data_loader(x, batch_size):
@@ -63,11 +65,36 @@ def train_model(output_dir, epochs):
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
 
+    optimizer_config = model.optimizer.get_config()
+    fn = os.path.join(".", "optimizer_config.json")
+    with open(fn, "w") as f:
+        json.dump(optimizer_config, f)
+
+    with open(fn) as f:
+        reloaded_config = json.load(f)
+
+    # Create the optimizer and compile the model
+    optimizer = tf.keras.optimizers.deserialize({
+        "class_name": reloaded_config["name"],
+        "config": reloaded_config
+    })
+
+    model.compile(optimizer=optimizer)
+
+    print("==> optimizer", optimizer)
+
+    optimizer_weights = [v.numpy() for v in model.optimizer.variables]
+    np.save("optimizer_weights.npy", optimizer_weights, allow_pickle=True)
+
+
+    exit()
+    
     # Set up callbacks
     callbacks = [
-        SaveWeightsCallback(
+        SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
-            period=50
+            period=50,
+            save_optimizer=True
         ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv")
@@ -106,7 +133,7 @@ if __name__ == "__main__":
         "--epochs",
         help="Number of training epochs",
         required=True,
-        type=str
+        type=int
     )
 
     args = parser.parse_args()
