@@ -134,10 +134,9 @@ def compute_fid_score(model, real_images, num_steps, batch_size, eta):
     start_time = time.time()
     gen_images = []
     for i in range(num_batches):
-
         print(f"batch {i+1}/{num_batches}")
-
         current_batch_size = min(batch_size, num_images - i*batch_size)
+
         img = model.ddim_sampling(
             current_batch_size,
             num_steps=num_steps,

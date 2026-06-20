@@ -8,19 +8,11 @@
 
 Diffusion models have become the state-of-the-art approach for generating images, videos, and audio. They power popular tools such as DALL-E 3, Stable Diffusion, Adobe Firefly, and Midjourney. They also found applications in many other domains, including 3D modeling, medical imaging, drug discovery, and molecular design.
 
-While the foundational concept of diffusion-based generation was introduced in 2015 by Sohl-Dickstein et al., the modern framework was established in 2020 by Jonathan Ho et al. in their seminal paper:
+While the foundational concept of diffusion-based generation was introduced in 2015 by Sohl-Dickstein et al., the modern framework was established in 2020 by Jonathan Ho et al. in their seminal paper [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) (DDPMs), which is now the most cited work in the field with 20,000+ citations as of 2025.
 
-[Denoising Diffusion Probabilistic Models (DDPMs)](https://arxiv.org/abs/2006.11239)
+Shortly after, Jiaming Song et al. introduced a new sampling technique that substantially reduced generation times by allowing deterministic, non-Markovian denoising: [Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502) (DDIMs).
 
-This paper is now the most cited work in the field, with 20,000+ citations as of 2025.
-
-Shortly after the DDPM paper came out, Jiaming Song et al. introduced a new sampling technique that substantially reduced generation times by allowing deterministic, non-Markovian denoising:
-
-[Denoising Diffusion Implicit Models (DDIMs)](https://arxiv.org/abs/2010.02502)
-
-In 2022, Robin Rombach et al. introduced diffusion models that operate in a compressed latent space rather that in the pixel space, enabling efficient scaling:
-
-[High-Resolution Image Synthesis with Latent Diffusion Models (LDMs)](https://arxiv.org/abs/2112.10752)
+In 2022, Robin Rombach et al. introduced diffusion models that operate in a compressed latent space rather that in the pixel space, enabling efficient scaling: [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) (LDMs).
 
 Ultimately, diffusion models surpassed GANs by producing higher-quality, more diverse samples while offering significantly greater training stability.
 
@@ -31,7 +23,7 @@ The goal of this project was to recreate the DDPM model from the 2020 paper by J
 
 While excellent PyTorch implementations of DDPM already exist (such as those by [lucidrains](https://github.com/lucidrains/denoising-diffusion-pytorch), [OpenAI](https://github.com/openai/improved-diffusion), [mattroz](https://github.com/mattroz/diffusion-ddpm), and [cloneofsimo](https://github.com/cloneofsimo/minDiffusion)), high-quality, modern TensorFlow/Keras implementations are far less common. For that reason, I chose to implement my model in TensorFlow.
 
-The math underlying diffusion models, the training and sampling algorithms, and the training setup are well-documented in the DDPM paper. However, the architecture of the U-Net is only described at a high-level (See section "B. Experimental details"). Because my goal was to directly compare my FID (Fréchet Inception Distance) scores with those reported in the paper, an exact architecture match was required. As a last resort, I looked for the missing details in [Jonathan Ho's GitHub repository](https://github.com/hojonathanho/diffusion).
+The math underlying diffusion models, the training and sampling algorithms, and the training setup are well-documented in the DDPM paper. However, the architecture of the U-Net is only described at a high-level (section "B. Experimental details"). Because my goal was to directly compare my FID (Fréchet Inception Distance) scores with those reported in the paper, an exact architecture match was required. As a last resort, I looked for the missing details in [Jonathan Ho's GitHub repository](https://github.com/hojonathanho/diffusion).
 
 I first used the MNIST dataset with a light-weight U-Net as a "pipe-cleaner". The shorter runtimes facilitated the validation of training and sampling flows, and FID calculations.
 
@@ -58,7 +50,7 @@ The code for this project is in the **./src** directory and is organized as show
     └── utils.py                   # Utilities and shared functions
 ```
 
-See file *requirements.txt* for the list of Python packages I used.
+See file **requirements.txt** for the list of Python packages I used.
 
 ## 4. U-Net model architecture
 
@@ -143,7 +135,7 @@ Low-quality images are shown on the last row, where it is impossible to identify
 
 ### 5.4 FID scores
 
-I used the 60,000 images of the MNIST training set as the reference distribution, and generated the same number of samples using DDIM sampling to compute FID scores.
+I used 10,000 images from the MNIST training set as the reference distribution, and generated the same number of images using DDIM sampling to compute FID scores.
 
 The results obtained are summarized in the table below.
 
@@ -198,22 +190,21 @@ My implementation differs in two ways that preclude direct comparison: I used a 
 
 Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as the reference distribution, and generated the same number of images using DDIM sampling to compute FID scores. The results I obtained are summarized in the table below.
 
-|  Training epochs  |  DDIM steps   |      FID       |
-|-------------------|---------------|----------------|
-|        150        |      100      |      11.3      |
-|        400        |      100      |       7.73     |
-|        500        |      100      |       6.72     |
-|        600        |      100      |       6.97     |
-|        700        |      100      |       7.01     |
-|        900        |      100      |       7.14     |
-|       1000        |      50       |       8.96     |
-|       1000        |      100      |       7.24     |
-|       1000        |      200      |       5.71     |
-|       2000        |      100      |       7.73     |
-|       2000        |      200      |       7.23     |
+
+|  Training epochs  |  100 steps  |  200 steps  |
+|-------------------|-------------|-------------|
+|        150        |     11.3    |             |
+|        400        |     7.73    |             |
+|        500        |     6.72    |    5.71     |
+|        550        |     6.89    |    6.34     |
+|        600        |     6.97    |             |
+|        700        |     7.01    |             |
+|        900        |     7.14    |             |
+|        1000       |     8.96    |    7.24     | 
+|        2000       |     7.73    |    7.23     |
 
 
-The FID score reaches its minimum after approximately 500 epochs, corresponding to ~195k optimization steps. Beyond this point, image quality no longer improves, even though the training loss continues to decrease. This behavior may originate from the replacement of the linear schedule by a cosine schedule, given that Ho et al. optimized their hyperparameters and training setup for a linear schedule. But further experiments would be required to confirm it.
+The FID score reaches its minimum after approximately 500 epochs, corresponding to ~195k optimization steps. Beyond this point, image quality no longer improves, and deteriorates, although the training loss continues to decrease. This behavior may originate from the replacement of the linear schedule by a cosine schedule, given that Ho et al. optimized their hyperparameters and training setup for a linear schedule. But further experiments would be required to confirm it.
 
 Increasing the number of DDIM sampling steps significantly improves sample quality, as observed with the model trained for 1,000 epochs. This behavior is expected, since a larger number of reverse diffusion steps yields a more accurate approximation of the underlying generative process.
 

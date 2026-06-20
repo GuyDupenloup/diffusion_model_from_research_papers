@@ -277,7 +277,8 @@ class DiffusionModel(tf.keras.models.Model):
 
     def ddpm_sampling(self, num_samples, keep_all_images=False):
         """
-        Samples the EMA network using the method from the DDPM paper.
+        Samples the EMA network using the method from the DDPM paper
+        by Jonathan Ho et al.
 
         Arguments:
             num_samples (integer):
@@ -319,6 +320,8 @@ class DiffusionModel(tf.keras.models.Model):
             all_images = tf.zeros((self.timesteps, num_samples, H, W, C), dtype=tf.float32)
 
         for t in reversed(range(self.timesteps)):
+
+            # Predict noise with EMA network
             t_tensor = tf.fill((num_samples,), t)
             predicted_noise = self.ema_net((images, t_tensor), training=False)
             
@@ -355,7 +358,8 @@ class DiffusionModel(tf.keras.models.Model):
 
     def ddim_sampling(self, num_samples, num_steps=100, eta=0.0):
         """
-        Samples the EMA network using the method from the DDIM paper.
+        Samples the EMA network using the method from the DDIM paper
+        by Jiaming Song et al.
 
         Arguments:
             num_samples (integer):
@@ -372,7 +376,7 @@ class DiffusionModel(tf.keras.models.Model):
         batch_shape = (num_samples,) + self.image_shape
         images = tf.random.normal(batch_shape)
 
-        # Fixed timestep schedule
+        # Generate denoising timesteps
         steps = tf.linspace(0.0, tf.cast(self.timesteps - 1, tf.float32), num_steps)
         steps = tf.cast(steps, tf.int32)
         steps = tf.reverse(steps, axis=[0])  # go from T -> 0
