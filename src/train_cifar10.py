@@ -5,9 +5,10 @@ import os
 import argparse
 from timeit import default_timer as timer
 from datetime import timedelta
+import numpy as np
 import tensorflow as tf
 from diffusion_model import DiffusionModel
-from utils import print_trainable_variables, SaveCheckpointCallback
+from utils import print_trainable_variables, SaveCheckpointCallback, load_checkpoint_weights
 
 
 def create_data_loader(x, batch_size):
@@ -27,14 +28,16 @@ def create_data_loader(x, batch_size):
     return ds
 
 
-def train_model(output_dir, epochs):
+def train_model(output_dir, epochs, resume_dir=None, epoch_offset=0):
 
     # Create the output directory
     os.makedirs(output_dir, exist_ok=True)
 
     # Load CIFAR-10 dataset
-    (x_train, y_train), _ = tf.keras.datasets.cifar10.load_data()
-    
+    # (x_train, y_train), _ = tf.keras.datasets.cifar10.load_data()
+    x_train = np.load(os.path.join(output_dir, "dataset", "cifar10_x_train.npy"))
+    y_train = np.load(os.path.join(output_dir, "dataset", "cifar10_y_train.npy"))
+
     # Create data loader for training set images
     train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
     train_ds = create_data_loader(x_train, batch_size=128)
@@ -55,19 +58,25 @@ def train_model(output_dir, epochs):
             "random_flip": True
         }
     })
-    
-    print_trainable_variables(model, params_only=True)
 
+    print_trainable_variables(model, params_only=True)
+    
     # The model handles loss function and metrics.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
 
+    if resume_dir:
+        print(f"Resuming training from directory {resume_dir}")
+        images = next(iter(train_ds))
+        load_checkpoint_weights(resume_dir, model, images)
+
     # Set up callbacks
     callbacks = [
         SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
-            period=50
+            period=1,
+            epoch_offset=epoch_offset
         ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv"),
@@ -109,6 +118,17 @@ if __name__ == "__main__":
         required=True,
         type=int
     )
+    parser.add_argument(
+        "--resume_dir",
+        help="Directory to resume training from",
+        type=str
+    )
+    parser.add_argument(
+        "--epoch_offset",
+        help="Epoch offset for naming checkpoint directories",
+        type=int,
+        default=0
+    )
 
     args = parser.parse_args()
-    train_model(args.output_dir, args.epochs)
+    train_model(args.output_dir, args.epochs, args.resume_dir, args.epoch_offset)

@@ -4,6 +4,7 @@
 import os
 import json
 from tabulate import tabulate
+import pickle
 import numpy as np
 import tensorflow as tf
 from diffusion_model import DiffusionModel
@@ -73,76 +74,63 @@ def load_diffusion_model(dirpath, ema_net_only=False):
     return model
 
 
-def save_model_optimizer(dirpath, model):
+class SaveCheckpointCallback(tf.keras.callbacks.Callback):
+    def __init__(self, save_dir, period=1, epoch_offset=0):
+        super().__init__()
+        self.save_dir = save_dir
+        self.period = period
+        self.epoch_offset = epoch_offset
 
-    # Create the output directory if it does not exist
-    os.makedirs(dirpath, exist_ok=True)
-    
-    # Save optimizer config
-    config = model.optimizer.get_config()
-    with open(os.path.join(dirpath, "optimizer_config.json"), "w") as f:
-        json.dump(config, f)
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.period == 0:
+            # Create checkpoint directory
+            epoch_dir = os.path.join(
+                self.save_dir,
+                f"epoch_{epoch + 1 + self.epoch_offset:04d}"
+            )
+            os.makedirs(epoch_dir, exist_ok=True)
 
-    # Save optimizer weights
-    weights = [v.numpy() for v in model.optimizer.variables]
-    np.savez(
-        os.path.join(dirpath, "optimizer_weights.npz"),
-        *weights
-    )
+            self.model.u_net.save_weights(os.path.join(epoch_dir, "u_net.weights.h5"))
+            self.model.ema_net.save_weights(os.path.join(epoch_dir, "ema_net.weights.h5"))
+
+            # Save optimizer weights
+            opt_weights = [v.numpy() for v in self.model.optimizer.variables]
+            np.savez(
+                os.path.join(epoch_dir, "optimizer_weights.npz"),
+                *opt_weights
+            )
+
+            print(f"\nSaved checkpoint for epoch {epoch+1} to {epoch_dir}")
 
 
-def restore_model_optimizer(dirpath, model):
+def load_checkpoint_weights(dirpath, model, images):
 
-    # Check that the optimizer directory exists
     if not os.path.isdir(dirpath):
-        raise ValueError(f"Unable to find diffusion model directory {dirpath}")
+        raise FileNotFoundError(f"Unable fo find checkpoint directory {dirpath}")
+
+    # Run a train step to build the optimizer       
+    model.train_step(images)
     
-    # Load optimizer config file
-    fn = os.path.join(dirpath, "optimizer_config.json")
-    if not os.path.isfile(fn):
-        raise ValueError(f"Unable to find optimizer configuration file {fn}")
-    with open(fn) as f:
-        config = json.load(f)
-
-    # Create optimizer and compile the model
-    optimizer = tf.keras.optimizers.deserialize({
-        "class_name": config["name"],
-        "config": config
-    })
-    model.compile(optimizer=optimizer)
-
-    # Build optimizer (train step with dummy inputs)
-    H, W, C = model.image_shape
-    dummy_images = tf.zeros((1, H, W, C), dtype=tf.float32)
-    model.train_step(dummy_images)
-
-    # Load optimizer weights
+    # Load optimizer weights file
     fn = os.path.join(dirpath, "optimizer_weights.npz")
     if not os.path.isfile(fn):
         raise ValueError(f"Unable to find optimizer config file {fn}")
     data = np.load(fn)
-    weights = [data[f"arr_{i}"] for i in range(len(data))]
+    opt_weights = [data[f"arr_{i}"] for i in range(len(data))]
 
     # Set weights on optimizer
-    for var, saved in zip(optimizer.variables, weights):
+    for var, saved in zip(model.optimizer.variables, opt_weights):
         var.assign(saved)
 
+    # Load U-Net weights
+    fn = os.path.join(dirpath, "u_net.weights.h5")
+    if not os.path.isfile(fn):
+        raise FileNotFoundError(f"Unable to find U-Net model weights {fn}")
+    model.u_net.load_weights(fn)
 
-class SaveCheckpointCallback(tf.keras.callbacks.Callback):
-    def __init__(self, save_dir, period=1):
-        super().__init__()
-        self.save_dir = save_dir
-        self.period = period
+    # Load EMA weights
+    fn = os.path.join(dirpath, "ema_net.weights.h5")
+    if not os.path.isfile(fn):
+        raise FileNotFoundError(f"Unable to find EMA model weights {fn}")
+    model.ema_net.load_weights(fn)
 
-    def on_epoch_end(self, epoch, logs=None):
-        if (epoch + 1) % self.period == 0:
-
-            # Create checkpoint directory
-            epoch_dir = os.path.join(self.save_dir, f"epoch_{epoch+1:04d}")
-            os.makedirs(epoch_dir, exist_ok=True)
-
-            # Save model and optimizer
-            self.model.save(epoch_dir)
-            save_model_optimizer(epoch_dir, self.model)
-
-            print(f"\nSaved checkpoint for epoch {epoch+1} to {epoch_dir}")

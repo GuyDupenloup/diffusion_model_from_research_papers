@@ -120,8 +120,6 @@ I used the training setup described in Appendix B "Experimental details" of the 
 
 I trained the model for 1,000 epochs.
 
-Instead of the linear variance schedule documented in the paper, I used the cosine schedule introduced by Nichol & Dhariwal in 2021. This type of schedule was shown to improve results in many settings as it avoids destroying image information too quickly at the beginning of the forward process, as observed with linear schedules.
-
 ### 5.3 Sampling
 
 Examples of images generated with the DDPM sampling method are shown in Figure 4. The images are shown at different timesteps of the reverse process.
@@ -176,8 +174,6 @@ Examples of generative "hallucinations" are shown on the last row of images:
 
 Ho et al. trained their model for 800k optimization steps (2,048 epochs with batch size 128) and reported an FID of 3.17 using 1,000-step DDPM sampling.
 
-My implementation differs in two ways that preclude direct comparison: I used a cosine variance schedule instead of linear, and DDIM sampling instead of DDPM.
-
 Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as the reference distribution, and generated the same number of images using DDIM sampling to compute FID scores. The results I obtained are summarized in the table below.
 
 
@@ -194,8 +190,6 @@ Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as
 |        2000       |     7.12    |    6.92     |
 
 
-The FID score reaches its minimum after approximately 500 epochs, corresponding to ~195k optimization steps. Beyond this point, image quality no longer improves, and deteriorates, although the training loss continues to decrease. This behavior may originate from the replacement of the linear schedule by a cosine schedule, given that Ho et al. optimized their hyperparameters and training setup for a linear schedule. But further experiments would be required to confirm it.
-
 Increasing the number of DDIM sampling steps significantly improves sample quality, as observed with the model trained for 1,000 epochs. This behavior is expected, since a larger number of reverse diffusion steps yields a more accurate approximation of the underlying generative process.
 
 I did not evaluate DDPM sampling because of its substantially higher computational cost. Since the original DDPM algorithm uses 1,000 denoising steps, DDIM sampling is approximately 10x faster with 100 steps and 5x faster with 200 steps (the computational cost is dominated by the number of forward passes through the model).
@@ -207,8 +201,6 @@ The DDIM sampling runtime on an A100 GPU is 2h30min for 50,000 images using 200 
 
 Recreating the diffusion model from the landmark DDPM paper by Jonathan Ho et al. bridged the gap between the theoretical generative equations and the intricacies of the U-Net architecture, training and evaluation procedures, and interpretation of results.
 
-With 1,000 training epochs and 200 DDIM sampling steps, the implemented model achieves an FID score of 5.71, with a 5x computational advantage compared to 1,000-step DDPM sampling. Although the FID score is not as good as the 3.17 score Ho et al. reported, it is a solid result. 
-
-Additional experiments would be required to investigate the reasons why replacing the linear variance schedule by a cosine schedule did not yield any improvement. Tuning hyperparameters and training setup for the cosine schedule may deliver on expectations.
+With 1,000 training epochs and 200 DDIM sampling steps, the implemented model achieves an FID score of 5.71, with a 5x computational advantage compared to 1,000-step DDPM sampling. Although the FID score is not as good as the 3.17 score Ho et al. reported, it is a solid result. I would be possible to improve the it by using more DDIM steps, but to the detriment of generation runtimes.
 
 It was absolutely fascinating to observe images progressively emerging from noise during the reverse process!
