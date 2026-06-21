@@ -67,11 +67,11 @@ def train_model(output_dir, epochs):
     callbacks = [
         SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
-            period=50,
-            save_optimizer=True
+            period=50
         ),
         tf.keras.callbacks.CSVLogger(
-            filename=os.path.join(output_dir, "metrics.csv")
+            filename=os.path.join(output_dir, "metrics.csv"),
+            append=True
         )
     ]
 

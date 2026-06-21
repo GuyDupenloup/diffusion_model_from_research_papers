@@ -64,40 +64,16 @@ def train_model(output_dir, epochs):
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
-
-    optimizer_config = model.optimizer.get_config()
-    fn = os.path.join(".", "optimizer_config.json")
-    with open(fn, "w") as f:
-        json.dump(optimizer_config, f)
-
-    with open(fn) as f:
-        reloaded_config = json.load(f)
-
-    # Create the optimizer and compile the model
-    optimizer = tf.keras.optimizers.deserialize({
-        "class_name": reloaded_config["name"],
-        "config": reloaded_config
-    })
-
-    model.compile(optimizer=optimizer)
-
-    print("==> optimizer", optimizer)
-
-    optimizer_weights = [v.numpy() for v in model.optimizer.variables]
-    np.save("optimizer_weights.npy", optimizer_weights, allow_pickle=True)
-
-
-    exit()
     
     # Set up callbacks
     callbacks = [
         SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
-            period=50,
-            save_optimizer=True
+            period=50
         ),
         tf.keras.callbacks.CSVLogger(
-            filename=os.path.join(output_dir, "metrics.csv")
+            filename=os.path.join(output_dir, "metrics.csv"),
+            append=True
         )
     ]
 

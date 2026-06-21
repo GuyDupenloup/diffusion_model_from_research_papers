@@ -118,6 +118,8 @@ I used the training setup described in Appendix B "Experimental details" of the 
 - Optimizer: Adam with learning rate 2e-4
 - Batch size: 128
 
+I trained the model for 1,000 epochs.
+
 Instead of the linear variance schedule documented in the paper, I used the cosine schedule introduced by Nichol & Dhariwal in 2021. This type of schedule was shown to improve results in many settings as it avoids destroying image information too quickly at the beginning of the forward process, as observed with linear schedules.
 
 ### 5.3 Sampling
@@ -132,23 +134,11 @@ Examples of images obtained using DDIM sampling with 50 steps are shown in Figur
 
 Low-quality images are shown on the last row, where it is impossible to identify the digits with reasonable confidence.
 
+### 5.4 FID score
 
-### 5.4 FID scores
+Using 10,000 images from the MNIST training set and DDIM sampling with 50 steps, the FID score is 37.8. 
 
-I used 10,000 images from the MNIST training set as the reference distribution, and generated the same number of images using DDIM sampling to compute FID scores.
-
-The results obtained are summarized in the table below.
-
-|  Training epochs  |  DDIM steps |   FID   |
-|-------------------|-------------|---------|
-|       100         |        50   |   43.6  |
-|       200         |        50   |   39.3  |
-|       300         |        50   |   38.2  |
-|       500         |        50   |   39.8  |
-|       500         |       100   |   37.7  |
-|       650         |       100   |   37.8  |
-
-These are not good FID scores, but this was expected given the small U-Net size. The goal was not to achieve state-of-the-art results.
+This is not a good score, but it was expected given the small size of the U-Net. The goal was not to obtain state-of-the-art results.
 
 ## 6. CIFAR-10 diffusion model
 

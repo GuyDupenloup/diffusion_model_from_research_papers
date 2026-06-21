@@ -36,12 +36,11 @@ class DiffusionModel(tf.keras.models.Model):
                 "random_flip": False
             },
 
-            # Cosine beta schedule parameters
+            # Linear beta schedule parameters
             "beta_schedule": {
                 "timesteps": 1000,
-                "s": 0.008,
-                "beta_min": 1e-05,
-                "beta_max": 0.999
+                "beta_start": 0.008,
+                "beta_end": 1e-05,
             },
 
             # Moving average parameters for EMA network
@@ -103,11 +102,11 @@ class DiffusionModel(tf.keras.models.Model):
         # Loss metric tracker for training
         self.loss_tracker = tf.keras.metrics.Mean(name="loss")
 
-        # Generate beta values using cosine schedule
+        # Generate beta values using linear schedule
         cfg = self.model_config["beta_schedule"]
         self.timesteps = cfg["timesteps"]
-        self.betas, self.alpha_bar = self.cosine_beta_schedule(
-            self.timesteps, s=cfg["s"], beta_min=cfg["beta_min"], beta_max=cfg["beta_max"]
+        self.betas, self.alpha_bar = self.linear_beta_schedule(
+            self.timesteps, cfg["beta_start"], cfg["beta_end"]
         )
 
     def complete_model_config(self, diffusion_cfg):
@@ -134,9 +133,8 @@ class DiffusionModel(tf.keras.models.Model):
         # Cosine beta schedule parameters
         beta_schedule_defaults = {
             "timesteps": 1000,
-            "s": 0.008,
-            "beta_min": 1e-5,
-            "beta_max": 0.999
+            "beta_start": 1e-4,
+            "beta_end": 0.02
         }
 
         # Moving average parameters for EMA network
@@ -159,7 +157,7 @@ class DiffusionModel(tf.keras.models.Model):
         return config
 
 
-    def save(self, dirpath):
+    def save(self, dirpath, ema_net_only=False):
         """
         Saves the following files to a directory:
             - Model configuration:  "model_config.json"
@@ -183,42 +181,33 @@ class DiffusionModel(tf.keras.models.Model):
             json.dump(self.model_config, f, indent=4)
 
         # Save the weights of the U-Net
-        self.u_net.save_weights(os.path.join(dirpath, "u_net.weights.h5"))
+        if not ema_net_only:
+            self.u_net.save_weights(os.path.join(dirpath, "u_net.weights.h5"))
 
         # Save the weights of the EMA network
         self.ema_net.save_weights(os.path.join(dirpath, "ema_net.weights.h5"))
 
 
-    def cosine_beta_schedule(self, timesteps, s, beta_min, beta_max):
+    def linear_beta_schedule(self, timesteps, beta_start, beta_end):
         """
-        Generates beta values using a cosine schedule.
+        Generates beta values using a linear schedule,
+        as in the original DDPM paper by Ho et al.
 
         Arguments:
-            timesteps (int): Number of diffusion steps.
-            s (float): Offset that control the starting point (shifts the cosine)
-            and curvature of the cosine.
-            beta_min, beta_max (floats): Valid beta value range (used for clipping).
+            timesteps (int): Number of diffusion steps (T).
+            beta_start (float): Starting beta value.
+            beta_end (float):   Ending beta value.
         """
 
-        # t in [0, T]
-        steps = timesteps + 1
-        t = tf.linspace(0.0, timesteps, steps)
+        # Linearly spaced betas from beta_start to beta_end. Shape: (timesteps,)
+        betas = tf.linspace(beta_start, beta_end, timesteps)
 
-        # cosine alpha_bar           ==> this alpha_bar(t)  ??
-        alpha_bar = tf.cos(
-            ((t / timesteps) + s) / (1.0 + s) * (math.pi / 2)
-        ) ** 2
-
-        # Normalize so alpha_bar[0] = 1
-        alpha_bar = alpha_bar / alpha_bar[0]
-
-        # Derive betas and ensure that they are in specified range
-        betas = 1.0 - (alpha_bar[1:] / alpha_bar[:-1])
-        betas = tf.clip_by_value(betas, beta_min, beta_max)
+        # Derive alpha_bar (cumulative products of (1 - beta_t))
+        alphas = 1.0 - betas
+        alpha_bar = tf.math.cumprod(alphas)
 
         return betas, alpha_bar
 
-        
     def update_ema_weights(self):
         """
         Gets the weights from the U-Net and update EMA's moving averages.
