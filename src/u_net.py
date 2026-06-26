@@ -437,14 +437,9 @@ class UNet(tf.keras.models.Model):
 
     Model arguments:
     ---------------
-        image_size (integer):
-            Size of the input images.
-
-        image_channels (integer):
-            Number of channels of the images.
-
-        base_channels (integer):
-            Number of channels the input projection convolution outputs.
+        image_size (int): Size of the input images.
+        image_channels (int): Number of channels of the images.
+        base_channels (int): Number of channels the input projection convolution outputs.
 
         channel_multiplier (tuple/list of integers):
             Specifies the number of channels at each resolution as a multiplying factor 
@@ -459,7 +454,7 @@ class UNet(tf.keras.models.Model):
                 8 x 8    -> 256
                 4 x 4    -> 384
 
-        num_resnet_blocks (integer):
+        num_resnet_blocks (int):
             Number of residual blocks in the down stages of the U-Net. In the up stages,
             the number of residual blocks is equal to `num_resnet_blocks` + 1.
 
@@ -468,17 +463,7 @@ class UNet(tf.keras.models.Model):
             For example, if `attn_resolutions`=(16,), attention blocks are inserted 
             at the 16x16 resolution.
 
-        dropout_rate (float):
-            Dropout rate for the dropout layers in the ResNet blocks.
-
-    Model call() method:
-    -------------------
-        Inputs:
-            x: Input images, a 4D tensor.
-            t: timestep index, an integer.
-
-        Returns:
-            Images passed through the U-Net, a 4D tensor.
+        dropout_rate (float): Dropout rate for the dropout layers in the ResNet blocks.
     """
 
     def __init__(
@@ -577,6 +562,17 @@ class UNet(tf.keras.models.Model):
 
 
     def call(self, inputs, training=None):
+        """
+        Forward pass through the U-Net.
+
+        Arguments:
+            inputs (4D tensor): batch of input images.
+            t (int): timestep index.
+
+        Returns:
+            The input images passed through the U-Net,
+            a 4D tensor.
+        """
 
         x, t = inputs
 

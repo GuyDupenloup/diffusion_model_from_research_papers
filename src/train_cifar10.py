@@ -28,7 +28,7 @@ def create_data_loader(x, batch_size):
     return ds
 
 
-def train_model(output_dir, epochs, resume_dir=None, epoch_offset=0):
+def train_model(output_dir, epochs, resume_dir=None, resume_epoch=0):
 
     # Create the output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -68,15 +68,14 @@ def train_model(output_dir, epochs, resume_dir=None, epoch_offset=0):
 
     if resume_dir:
         print(f"Resuming training from directory {resume_dir}")
-        images = next(iter(train_ds))
-        load_checkpoint_weights(resume_dir, model, images)
+        load_checkpoint_weights(resume_dir, model)
 
     # Set up callbacks
     callbacks = [
         SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
-            period=1,
-            epoch_offset=epoch_offset
+            period=50,
+            epoch_offset=resume_epoch
         ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv"),
@@ -124,8 +123,8 @@ if __name__ == "__main__":
         type=str
     )
     parser.add_argument(
-        "--epoch_offset",
-        help="Epoch offset for naming checkpoint directories",
+        "--resume_epoch",
+        help="Epoch number starting from the beginning of the training",
         type=int,
         default=0
     )

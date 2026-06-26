@@ -130,7 +130,7 @@ class DiffusionModel(tf.keras.models.Model):
             "random_flip": False
         }
 
-        # Cosine beta schedule parameters
+        # Beta schedule parameters
         beta_schedule_defaults = {
             "timesteps": 1000,
             "beta_start": 1e-4,
@@ -159,10 +159,10 @@ class DiffusionModel(tf.keras.models.Model):
 
     def save(self, dirpath, ema_net_only=False):
         """
-        Saves the following files to a directory:
-            - Model configuration:  "model_config.json"
-            - U-net model weights:  "u_net.weights.h5"
-            - EMA model weights:  "ema_net.weights.h5"
+        Saves the following files to the `dirpath` directory:
+            - model_config.json         Model configuration dict
+            - u_net.weights.h5          U-net model weights
+            - ema_net.weights.h5        EMA model weights
 
         The diffusion model can be recreated from these three files.
 
@@ -174,9 +174,10 @@ class DiffusionModel(tf.keras.models.Model):
             dirpath (str): Path to the directory where to save files.
         """
 
+        # Create the directory where files will be saved
         os.makedirs(dirpath, exist_ok=True)
 
-        # Save configuration to JSON file
+        # Save model configuration to JSON file
         with open(os.path.join(dirpath, "model_config.json"), "w") as f:
             json.dump(self.model_config, f, indent=4)
 
@@ -196,10 +197,16 @@ class DiffusionModel(tf.keras.models.Model):
         Arguments:
             timesteps (int): Number of diffusion steps (T).
             beta_start (float): Starting beta value.
-            beta_end (float):   Ending beta value.
+            beta_end (float): Ending beta value.
+
+        Returns:
+            betas: Linearly spaced beta values from 0 to timesteps.
+                   A tensor with shape (timesteps).
+            alpha_bar: Cumulative products of (1 - betas).
+                   A tensor with shape (timesteps). 
         """
 
-        # Linearly spaced betas from beta_start to beta_end. Shape: (timesteps,)
+        # Linearly spaced betas from beta_start to beta_end.
         betas = tf.linspace(beta_start, beta_end, timesteps)
 
         # Derive alpha_bar (cumulative products of (1 - beta_t))
@@ -207,6 +214,7 @@ class DiffusionModel(tf.keras.models.Model):
         alpha_bar = tf.math.cumprod(alphas)
 
         return betas, alpha_bar
+
 
     def update_ema_weights(self):
         """
@@ -220,9 +228,25 @@ class DiffusionModel(tf.keras.models.Model):
                 self.ema_decay * ema_weight + (1.0 - self.ema_decay) * weight
             )
 
+
     def train_step(self, images):
         """
-        Runs a training step for an input batch of images.
+        Performs a single training step for the DDPM model.
+
+        This method:
+            - Applies data augmentation (random horizontal flip if enabled).
+            - Samples timesteps and Gaussian noise.
+            - Corrupts input images to create noisy versions.
+            - Predicts noise using the U-Net and computes MSE loss.
+            - Updates the U-Net weights via gradient descent.
+            - Updates the EMA (Exponential Moving Average) of the U-Net weights.
+            - Logs the loss for tracking.
+
+        Arguments:
+            images (4D tensor): A batch of input images.
+
+        Returns:
+            A dictionary providing the current loss value, e.g. {'loss': 0.1})
         """
 
         # Randomly flip images horizontally
@@ -247,7 +271,7 @@ class DiffusionModel(tf.keras.models.Model):
             tf.sqrt(1.0 - alpha_bar_t) * noises
         )
 
-        # Predict noises using the U-Net and calculate the loss
+        # Predict noises using the U-Net and calculate the MSE loss
         with tf.GradientTape() as tape:
             pred_noises = self.u_net([noisy_images, t], training=True)
             loss = tf.reduce_mean(tf.square(noises - pred_noises))
@@ -266,29 +290,29 @@ class DiffusionModel(tf.keras.models.Model):
 
     def ddpm_sampling(self, num_samples, keep_all_images=False):
         """
-        Samples the EMA network using the method from the DDPM paper
-        by Jonathan Ho et al.
+        Implements the sampling algorithm from the DDPM paper (Ho et al.),
+        using the EMA-averaged U-Net weights for denoising.
 
         Arguments:
-            num_samples (integer):
-                Number of samples to generate.
-            keep_all_images (boolean):
-                If False:
-                    Only the last images of the denoising process (t=0) are kept.
-                If True:
-                    All the images of the denoising process (t=T to t=0) are kept.
+            num_samples(int) : Number of images to generate.
+            keep_all_images (bool):
+                If False, only the final denoised images (t=0) are returned.
+                If True, all intermediate images (t=T-1 to t=0) are returned.
 
         Returns:
-            Sampled images.
-            If `keep_all_images` is:
-                False: returns a tensor with shape (batch, H, W, C).            
-                True: returns a tensor with shape (batch, T, H, W, C).
+            If keep_all_images is False:
+                A tensor of shape (num_samples, H, W, C).
+            If keep_all_images is True:
+                A tensor of shape (num_samples, T, H, W, C).
         """
 
         alphas = 1.0 - self.betas
         alphas_cumprod = tf.math.cumprod(alphas, axis=0)
         alphas_cumprod_prev = tf.concat([[1.0], alphas_cumprod[:-1]], axis=0)
-        
+        sqrt_recip_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod)
+        sqrt_recipm1_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod - 1.0)
+
+        # Precompute posterior variance and mean coefficients for the reverse process
         posterior_variance = (
             self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
         )
@@ -298,34 +322,36 @@ class DiffusionModel(tf.keras.models.Model):
         posterior_mean_coef2 = (
             (1.0 - alphas_cumprod_prev) * tf.sqrt(alphas) / (1.0 - alphas_cumprod)
         )
-        sqrt_recip_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod)
-        sqrt_recipm1_alphas_cumprod = tf.sqrt(1.0 / alphas_cumprod - 1.0)
-    
+
+        # Initialize random noise for the starting point (t = T)
         batch_shape = (num_samples,) + self.image_shape
         images = tf.random.normal(batch_shape)
 
+        # If keeping all images, prepare a tensor to store intermediate results
         if keep_all_images:
             H, W, C = self.image_shape
             all_images = tf.zeros((self.timesteps, num_samples, H, W, C), dtype=tf.float32)
 
         for t in reversed(range(self.timesteps)):
 
-            # Predict noise with EMA network
+            # Predict noise with EMA network at current timestep
             t_tensor = tf.fill((num_samples,), t)
             predicted_noise = self.ema_net((images, t_tensor), training=False)
             
+            # Reconstruct x_0 from the current noisy image and predicted noise
             x_recon = (
                 sqrt_recip_alphas_cumprod[t] * images - 
                 sqrt_recipm1_alphas_cumprod[t] * predicted_noise
             )
-            # FIX 3: clamp x_recon to the model's valid range
             x_recon = tf.clip_by_value(x_recon, -1, 1)
 
+            # Compute the mean of the reverse process distribution
             model_mean = (
                 posterior_mean_coef1[t] * x_recon + 
                 posterior_mean_coef2[t] * images
             )
         
+            # Add noise for timesteps > 0
             if t > 0:
                 noise = tf.random.normal(batch_shape)
                 model_log_variance = tf.math.log(posterior_variance[t])
@@ -333,12 +359,14 @@ class DiffusionModel(tf.keras.models.Model):
             else:
                 images = model_mean
         
+            # Store intermediate images if required
             if keep_all_images:
                 images_expanded = tf.expand_dims(images, axis=0)
                 all_images = tf.tensor_scatter_nd_update(
                     all_images, [[t]], images_expanded
                 )
 
+        # Return all images or just the final ones
         if keep_all_images:
             return tf.transpose(all_images, perm=[1, 0, 2, 3, 4])
         else:
@@ -347,15 +375,13 @@ class DiffusionModel(tf.keras.models.Model):
 
     def ddim_sampling(self, num_samples, num_steps=100, eta=0.0):
         """
-        Samples the EMA network using the method from the DDIM paper
-        by Jiaming Song et al.
+        Implements the sampling algorithm from the DDIM paper (Song et al.),
+        using the EMA-averaged U-Net weights for denoising.
 
         Arguments:
-            num_samples (integer):
-                Number of samples to generate.
-            num_steps (integer):
-                Number of timesteps used during the reverse diffusion process.
-            eta (float):
+            num_samples (int): Number of samples to generate.
+            num_steps (int): Number of timesteps used during the reverse diffusion process.
+            eta (float): 
                 Controls the stochasticity of the sampling process:
                     - eta = 0: purely deterministic
                     - eta > 0: some stochasticity

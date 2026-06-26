@@ -118,9 +118,15 @@ I used the training setup described in Appendix B "Experimental details" of the 
 - Optimizer: Adam with learning rate 2e-4
 - Batch size: 128
 
-I trained the model for 1,000 epochs.
+I trained the model for 250 epochs.
 
-### 5.3 Sampling
+### 5.3 FID score
+
+Using 10,000 images from the MNIST training set and DDIM sampling with 50 steps, the FID score is 29.8. 
+
+This is not a good score, but it was expected given the small size of the U-Net. The goal was not to obtain state-of-the-art results.
+
+### 5.4 Visualizing generated images
 
 Examples of images generated with the DDPM sampling method are shown in Figure 4. The images are shown at different timesteps of the reverse process.
 
@@ -132,11 +138,6 @@ Examples of images obtained using DDIM sampling with 50 steps are shown in Figur
 
 Low-quality images are shown on the last row, where it is impossible to identify the digits with reasonable confidence.
 
-### 5.4 FID score
-
-Using 10,000 images from the MNIST training set and DDIM sampling with 50 steps, the FID score is 37.8. 
-
-This is not a good score, but it was expected given the small size of the U-Net. The goal was not to obtain state-of-the-art results.
 
 ## 6. CIFAR-10 diffusion model
 
@@ -144,21 +145,50 @@ This is not a good score, but it was expected given the small size of the U-Net.
 
 For CIFAR-10, I used the exact same U-Net as in Ho's code (Figure 1).
 
-### 6.2 Training setup
+### 6.2 Training
 
-I used the training setup described in appendix B "Experimental results" of the DDPM paper.
+I used the training setup described in appendix B "Experimental results" of the DDPM paper. It is the same setup as for MNIST, with the addition of random horizontal flips to increase image diversity.
 
-It is the same setup as for MNIST, with the addition of random horizontal flips to increase image diversity.
+Ho et al. specified that they trained their model for ~800k steps with a batch size of 128, which represents 2048 epochs, so I did the same.
 
-Runtime on an A100 GPU is 48sec/epoch (~13 hours for 1,000 epochs).
+The loss values for each epoch are shown in Figure x. No more improvement is visible when the training ends at epoch 2048.
 
-### 6.3 Sampling
+Runtime on an A100 GPU was 48sec/epoch on an A100 GPU, so the training took ~27 hours to run.
 
-Figure 6 shows examples of images obtained using the DDPM sampling method.
+![](pictures/mse_loss.png)
+
+### 6.3 FID scores
+
+Like Ho et al., I used the 50,000 images of the CIFAR-10 training set as the reference distribution.
+
+I computed the FID at epoch 1200 of the training, which is about half-way to Ho et al.'s 800K steps. Using deterministic DDIM sampling with 200 steps, the computed value is 4.94.
+
+FID values at the end of the training at epoch 2048 are shown in the table below for different numbers of DDIM steps, together with the runtimes on an A100 GPU generating batches of 2000 images.
+
+
+|  Denoising steps  |  Sampling method   |   FID  |  Runtime (hh:mm)  |
+|-------------------|-----------|-----------|---------------------|
+|      50           |    DDIM   |   5.77    |         0:20        |
+|     100           |    DDIM   |   4.53    |         0:41        |
+|     200           |    DDIM   |   4.11    |         1:22        |
+|    1000           |    DDPM   |           |                     |
+
+As expected:
+
+- The FID improves with the number of steps.
+- Because they are dominated by the number of forward passes through the U-Net, runtimes increase linearly with the number of steps.
+
+Note that the 200-step-DDIM FID decreased from 4.94 after 1200 training epochs to 4.11 after 2048 epochs.
+
+Ho et al. reported an FID value of 3.17 using the 50,000 images of the CIFAR-10 training set as the reference distribution (Table 1 in the paper).
+
+### 6.4 Visualizing generated images
+
+Figure 7 shows examples of images obtained using the DDPM sampling method.
 
 ![](pictures/cifar10_ddpm_samples.png)
 
-Figure 7 shows images generated using the DDIM sampling method.
+Figure 8 shows images generated using the DDIM sampling method with 200 steps.
 
 Examples of generative "hallucinations" are shown on the last row of images:
 
@@ -167,40 +197,13 @@ Examples of generative "hallucinations" are shown on the last row of images:
 - A pink cat
 - A deer with front legs shaped like horns
 
+The images were obtained using only 25 DDIM steps, which corresponds to an FID of x.
+
 ![](pictures/cifar10_ddim_samples.png)
-
-
-### 6.4 FID scores
-
-Ho et al. trained their model for 800k optimization steps (2,048 epochs with batch size 128) and reported an FID of 3.17 using 1,000-step DDPM sampling.
-
-Like in the DDPM paper, I used the 50,000 images of the CIFAR-10 training set as the reference distribution, and generated the same number of images using DDIM sampling to compute FID scores. The results I obtained are summarized in the table below.
-
-
-|  Training epochs  |  100 steps  |  200 steps  |
-|-------------------|-------------|-------------|
-|        150        |     11.3    |             |
-|        400        |     8.73    |             |
-|        500        |     6.72    |    5.71     |
-|        550        |     6.89    |    6.34     |
-|        600        |     6.91    |             |
-|        700        |     7.05    |             |
-|        900        |     7.14    |             |
-|        1000       |     7.01    |    6.68     | 
-|        2000       |     7.12    |    6.92     |
-
-
-Increasing the number of DDIM sampling steps significantly improves sample quality, as observed with the model trained for 1,000 epochs. This behavior is expected, since a larger number of reverse diffusion steps yields a more accurate approximation of the underlying generative process.
-
-I did not evaluate DDPM sampling because of its substantially higher computational cost. Since the original DDPM algorithm uses 1,000 denoising steps, DDIM sampling is approximately 10x faster with 100 steps and 5x faster with 200 steps (the computational cost is dominated by the number of forward passes through the model).
-
-The DDIM sampling runtime on an A100 GPU is 2h30min for 50,000 images using 200 steps, which is about 0.18 sec/image. Sampling with DDPM would take approximately 12.5 hours.
 
 
 ## 7. Conclusion
 
 Recreating the diffusion model from the landmark DDPM paper by Jonathan Ho et al. bridged the gap between the theoretical generative equations and the intricacies of the U-Net architecture, training and evaluation procedures, and interpretation of results.
-
-With 1,000 training epochs and 200 DDIM sampling steps, the implemented model achieves an FID score of 5.71, with a 5x computational advantage compared to 1,000-step DDPM sampling. Although the FID score is not as good as the 3.17 score Ho et al. reported, it is a solid result. I would be possible to improve the it by using more DDIM steps, but to the detriment of generation runtimes.
 
 It was absolutely fascinating to observe images progressively emerging from noise during the reverse process!
