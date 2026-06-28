@@ -297,13 +297,13 @@ class DiffusionModel(tf.keras.models.Model):
             num_samples(int) : Number of images to generate.
             keep_all_images (bool):
                 If False, only the final denoised images (t=0) are returned.
-                If True, all intermediate images (t=T-1 to t=0) are returned.
+                If True, all intermediate images (t=T-1 to t=0) are returned
+                (useful for viewing the denoising process).
 
         Returns:
-            If keep_all_images is False:
-                A tensor of shape (num_samples, H, W, C).
-            If keep_all_images is True:
-                A tensor of shape (num_samples, T, H, W, C).
+            A tensor with shape:
+                (num_samples, H, W, C) if keep_all_images=False.
+                (num_samples, T, H, W, C) if keep_all_images=True.
         """
 
         alphas = 1.0 - self.betas
@@ -391,10 +391,13 @@ class DiffusionModel(tf.keras.models.Model):
         batch_shape = (num_samples,) + self.image_shape
         images = tf.random.normal(batch_shape)
 
-        # Generate denoising timesteps
-        steps = tf.linspace(0.0, tf.cast(self.timesteps - 1, tf.float32), num_steps)
-        steps = tf.cast(steps, tf.int32)
-        steps = tf.reverse(steps, axis=[0])  # go from T -> 0
+        # Generate denoising timesteps using quadratic subsequence (Song et al.)
+        steps = np.array([
+            int((i / num_steps) ** 2 * self.timesteps)
+            for i in range(num_steps)
+        ])
+        steps = np.clip(steps, 0, self.timesteps - 1)
+        steps = tf.cast(steps[::-1], tf.int32)  # go from T -> 0
 
         for i in range(num_steps):
 
