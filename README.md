@@ -124,8 +124,6 @@ I trained the model for 500 epochs. The MNIST training set has 60,000 images, so
 
 The MSE loss value as a function of epochs is shown in Figure 4. 
 
-![](pictures/mnist_loss.png)
-
 ### 5.3 FID scores
 
 Using the 60,000 images from the MNIST training set as the reference distribution, the FID scores I obtained are shown in the table below. 
@@ -240,8 +238,8 @@ The main difficulty was to recreate the U-Net used in the DDPM paper. As many de
 
 I used the training setup described in Ho et al.'s paper. Looking into their code afterwards, they used gradient clipping and learning rate warmup steps. As they were not documented in the paper, I did not implement them. This may explain some of the FID differences with their results.
 
-The FID results I obtained with DDIM sampling are very close to the results Song et al. reported in their paper, using a DDPM model created and trained by Ho et al This demonstrates that my model, recreated and trained from scratch, performs at about the same level.
+The FID results I obtained with DDIM sampling are very close to the results Song et al. reported in their paper, using a DDPM model created and trained by Ho et al. This demonstrates that my model, recreated and trained from scratch, performs at about the same level. The runtime advantage of DDIM sampling vs. DDPM sampling is very impressive: 10x for 100 steps, 20x for 50 steps, while maintaining good FID scores.
 
 The FID results I got with DDPM sampling are significantly worse than the score Ho et al. reported in their paper. However, random generation clearly impacts results. With more trials, I may have been able to improve my results.
 
-This work shows that reproducing results from research papers is not always straightforward, a well-known problem. But it was very rewarding to watch images emerging from pure noise!
+This work shows that reproducing results from research papers is not always straightforward, sometimes even by the authors. But it was very rewarding to watch images emerging from pure noise!
