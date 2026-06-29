@@ -23,7 +23,9 @@ The goal of this project was to recreate the DDPM model from the 2020 paper by J
 
 While excellent PyTorch implementations of DDPM already exist (such as those by [lucidrains](https://github.com/lucidrains/denoising-diffusion-pytorch), [OpenAI](https://github.com/openai/improved-diffusion), [mattroz](https://github.com/mattroz/diffusion-ddpm), and [cloneofsimo](https://github.com/cloneofsimo/minDiffusion)), high-quality, modern TensorFlow/Keras implementations are far less common. For that reason, I chose to implement my model in TensorFlow.
 
-The math underlying diffusion models, the training and sampling algorithms, and the training setup are well-documented in the DDPM paper. However, the architecture of the U-Net is only described at a high-level (section "B. Experimental details"). Because my goal was to directly compare my FID (Fréchet Inception Distance) scores with those reported in the paper, an exact architecture match was required. As a last resort, I looked for the missing details in [Jonathan Ho's GitHub repository](https://github.com/hojonathanho/diffusion).
+The math underlying diffusion models, the training and sampling algorithms, and the training setup are well-documented in the DDPM paper. However, the architecture of the U-Net is only described at a high-level (section "B. Experimental details"). Because my goal was to directly compare my FID (Fréchet Inception Distance) scores with those reported in the paper, an exact architecture match was required.
+
+As a last resort, I looked for the missing U-Net details in [Jonathan Ho's GitHub repository](https://github.com/hojonathanho/diffusion) whose address is provided in the paper. The code is in TensorFlow 1, which is now obsolete.
 
 I first used the MNIST dataset with a light-weight U-Net as a "pipe-cleaner". The shorter runtimes facilitated the validation of training and sampling flows, and FID calculations.
 
@@ -108,7 +110,7 @@ I made the following changes to the CIFAR-10 U-Net used in the DDPM paper:
 
  With only 4.9M parameters, the MNIST U-Net is much smaller than the CIFAR-10 U-Net that has 35.9M parameters.
 
-### 5.2 Training setup
+### 5.2 Training
 
 I used the training setup described in Appendix B "Experimental details" of the DDPM paper:
 
@@ -118,17 +120,27 @@ I used the training setup described in Appendix B "Experimental details" of the 
 - Optimizer: Adam with learning rate 2e-4
 - Batch size: 128
 
-I trained the model for 250 epochs.
+I trained the model for 500 epochs. The MNIST training set has 60,000 images, so this represents ~234K optimization steps.
 
-### 5.3 FID score
+The MSE loss value as a function of epochs is shown in Figure 4. 
 
-Using 10,000 images from the MNIST training set and DDIM sampling with 50 steps, the FID score is 29.8. 
+![](pictures/mnist_loss.png)
 
-This is not a good score, but it was expected given the small size of the U-Net. The goal was not to obtain state-of-the-art results.
+### 5.3 FID scores
+
+Using the 60,000 images from the MNIST training set as the reference distribution, the FID scores I obtained are shown in the table below. 
+
+|  Steps   |   FID   |
+|----------|---------|
+|      10  |  22.15  |
+|      20  |  20.01  |
+|      50  |  19.46  |
+
+These are hardly decent results, but they were to be expected given the small size of the U-Net (only 4.9M parameters).
 
 ### 5.4 Visualizing generated images
 
-Examples of images generated with the DDPM sampling method are shown in Figure 4. The images are shown at different timesteps of the reverse process.
+Examples of MNIST images generated using the DDPM sampling method are shown in Figure 4. The images are shown at different timesteps of the reverse process.
 
 ![](pictures/mnist_ddpm_samples.png)
 
@@ -151,44 +163,62 @@ I used the training setup described in appendix B "Experimental results" of the 
 
 Ho et al. specified that they trained their model for ~800k steps with a batch size of 128, which represents 2048 epochs, so I did the same.
 
-The loss values for each epoch are shown in Figure x. No more improvement is visible when the training ends at epoch 2048.
+The loss value at each training epoch is shown in Figure 6. It is still decreasing when the training ends after 2028 epochs. Maybe Ho et al. stopped after 800K steps to avoid overfitting.
 
-Runtime on an A100 GPU was 48sec/epoch on an A100 GPU, so the training took ~27 hours to run.
+Runtime on an A100 GPU was 48sec/epoch, so the training took ~27 hours.
 
-![](pictures/mse_loss.png)
+![](pictures/cifar10_loss.png)
 
 ### 6.3 FID scores
 
-Like Ho et al., I used the 50,000 images of the CIFAR-10 training set as the reference distribution.
+Like Ho et al., I used the 50,000 images of the CIFAR-10 training set as the reference distribution. 
 
-I computed the FID at epoch 1200 of the training, which is about half-way to Ho et al.'s 800K steps. Using deterministic DDIM sampling with 200 steps, the computed value is 4.94.
+The FID values Song et al. mentioned in their paper (Table 1) are shown in the table below, together with my own results.
 
-FID values at the end of the training at epoch 2048 are shown in the table below for different numbers of DDIM steps, together with the runtimes on an A100 GPU generating batches of 2000 images.
+|  Steps   |  Song et al.  |  My model   |
+|----------|---------------|-------------|
+|      10  |     13.36     |    15.82    |
+|      20  |      6.84     |     7.83    |
+|      50  |      4.67     |     5.06    |
+|     100  |      4.16     |     4.49    |
+|    1000  |      4.04     |     4.14    |
 
+Although not as good as the FID scores Song et al. reported, my results are all in the same ballpark, and nearly identical for 100  and 1000 steps.
 
-|  Denoising steps  |  Sampling method   |   FID  |  Runtime (hh:mm)  |
-|-------------------|-----------|-----------|---------------------|
-|      50           |    DDIM   |   5.77    |         0:20        |
-|     100           |    DDIM   |   4.53    |         0:41        |
-|     200           |    DDIM   |   4.11    |         1:22        |
-|    1000           |    DDPM   |           |                     |
+In section "D.1 Datasets and architectures" of "Appendix D. Experimental Details" of their paper, Song et al. specified: *"We use the pretrained models from Ho et al.(2020) for CIFAR10"*. They did not create and train their own model, like I did, so their numbers truly reflect the performance of Ho et al.'s model.
 
-As expected:
+Given how close my FID results are, it is very unlikely that differences could be caused by a misalignment of model architectures. They most probably originate from the training.
 
-- The FID improves with the number of steps.
-- Because they are dominated by the number of forward passes through the U-Net, runtimes increase linearly with the number of steps.
+Looking into Ho's code on GitHub, I could spot the following enhancements that are not documented in their paper, which I did not implement:
 
-Note that the 200-step-DDIM FID decreased from 4.94 after 1200 training epochs to 4.11 after 2048 epochs.
+- They used a 5000 steps warmup before holding the learning rate steady at 2e-4.
+- They clipped gradients to 1.0.
 
-Ho et al. reported an FID value of 3.17 using the 50,000 images of the CIFAR-10 training set as the reference distribution (Table 1 in the paper).
+FID mismatches could also come from subtle numerical differences between GPU and TPU training (they used TPU), and from random generation differences due to different hardware and seeds. 
+
+In their paper, Ho et al. reported an FID value of 3.17. Using their sampling method, I got an FID of 6.43 with a first run, and 5.71 with a second run after changing the random generation seed. With this method, which is statistical, changing seeds or hardware (they used TPU, I used GPU) yields significantly different results. It is unknown if Ho et al. could reliably reproduce their 3.17 run.
+
+I ran DDIM sampling with eta=1, making sampling statistical and approaching DDPM. Using 100 steps, I obtained an FID of 5.76. This is consistent with the DDPM sampling results.
+
+### 6.4 Sampling runtimes
+
+The table below shows the runtimes on an A100 GPU to generate 50,000 CIFAR-10 images, using DDIM sampling with different numbers of steps. Because they are dominated by the number of forward passes through the U-Net, runtimes increase linearly with the number of steps.
+
+|  Steps  |  A100 runtime (h:mm:ss)  |
+|---------|------------------------|
+|    10   |       0:04:74          |
+|    20   |       0:09:57          |
+|    50   |       0:20:49          |
+|   100   |       0:41:00          |
+|  1000   |       6:55:10          |
 
 ### 6.4 Visualizing generated images
 
-Figure 7 shows examples of images obtained using the DDPM sampling method.
+Figure 7 shows examples of images obtained using the DDPM sampling method, which yields an FID of 4.40.
 
 ![](pictures/cifar10_ddpm_samples.png)
 
-Figure 8 shows images generated using the DDIM sampling method with 200 steps.
+Figure 8 shows images generated using the DDIM sampling method with 100 steps.
 
 Examples of generative "hallucinations" are shown on the last row of images:
 
@@ -197,13 +227,21 @@ Examples of generative "hallucinations" are shown on the last row of images:
 - A pink cat
 - A deer with front legs shaped like horns
 
-The images were obtained using only 25 DDIM steps, which corresponds to an FID of x.
+The images were obtained using only 100 DDIM steps, which corresponds to an FID of 4.40.
 
 ![](pictures/cifar10_ddim_samples.png)
 
 
 ## 7. Conclusion
 
-Recreating the diffusion model from the landmark DDPM paper by Jonathan Ho et al. bridged the gap between the theoretical generative equations and the intricacies of the U-Net architecture, training and evaluation procedures, and interpretation of results.
+Recreating the diffusion model from the landmark DDPM paper by Jonathan Ho et al. bridged the gap between the theoretical generative equations and the intricacies of the U-Net architecture, training and sampling methods, and interpretation of results.
 
-It was absolutely fascinating to observe images progressively emerging from noise during the reverse process!
+The main difficulty was to recreate the U-Net used in the DDPM paper. As many details were missing in the paper, I had to reverse-engineer the authors' TensorFlow 1 code on GitHub.
+
+I used the training setup described in Ho et al.'s paper. Looking into their code afterwards, they used gradient clipping and learning rate warmup steps. As they were not documented in the paper, I did not implement them. This may explain some of the FID differences with their results.
+
+The FID results I obtained with DDIM sampling are very close to the results Song et al. reported in their paper, using a DDPM model created and trained by Ho et al This demonstrates that my model, recreated and trained from scratch, performs at about the same level.
+
+The FID results I got with DDPM sampling are significantly worse than the score Ho et al. reported in their paper. However, random generation clearly impacts results. With more trials, I may have been able to improve my results.
+
+This work shows that reproducing results from research papers is not always straightforward, a well-known problem. But it was very rewarding to watch images emerging from pure noise!
