@@ -12,7 +12,7 @@ While the foundational concept of diffusion-based generation was introduced in 2
 
 Shortly after, Jiaming Song et al. introduced a new sampling technique that substantially reduced generation times by allowing deterministic, non-Markovian denoising: [Denoising Diffusion Implicit Models](https://arxiv.org/abs/2010.02502) (DDIMs).
 
-In 2022, Robin Rombach et al. introduced diffusion models that operate in a compressed latent space rather that in the pixel space, enabling efficient scaling: [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) (LDMs).
+In 2022, Robin Rombach et al. introduced diffusion models that operate in a compressed latent space rather than in the pixel space, enabling efficient scaling: [High-Resolution Image Synthesis with Latent Diffusion Models](https://arxiv.org/abs/2112.10752) (LDMs).
 
 Ultimately, diffusion models surpassed GANs by producing higher-quality, more diverse samples while offering significantly greater training stability.
 
@@ -41,15 +41,21 @@ The code for this project is in the **./src** directory and is organized as show
     |     
     ├── u_net.py                   # U-Net model
     |
+    ├── diffusion_model.py         # DDPM diffusion model (includes DDPM/DDIM sampling)
+    |
     ├── train_mnist.py             # Train diffusion model on MNIST dataset
     |
     ├── train_cifar10.py           # Train diffusion model on CIFAR-10 dataset
     |
-    ├── compute_fid.py             # Compute FID score
+    ├── compute_mnist_fid.py       # Compute MNIST FID score
+    |
+    ├── compute_cifar10_fid.py     # Compute CIFAR-10 FID score
     |
     ├── view_gen_images.py         # Generate images and display them
     |
-    └── utils.py                   # Utilities and shared functions
+    ├── model_utils.py             # Model utilities (load models, save/reload training checkpoints)
+    |
+    └── fid_utils.py               # Shared FID calculation functions
 ```
 
 See file **requirements.txt** for the list of Python packages I used.
@@ -83,7 +89,6 @@ The residual block was clearly inspired from Wide ResNet and PixelCNN++, as ment
 - A dropout layer is inserted between the normalization and convolution layers of the second sub-block.
 
 In appendix B "Experimental Details" of the DDPM paper :
-
 ```
 Our CIFAR-10 model has 35.7 million parameters, and our LSUN and CelebA-HQ models have 114 million
 parameters. We also trained a larger variant of the LSUN Bedroom model with approximately 
@@ -120,13 +125,11 @@ I used the training setup described in Appendix B "Experimental details" of the 
 - Optimizer: Adam with learning rate 2e-4
 - Batch size: 128
 
-I trained the model for 500 epochs. The MNIST training set has 60,000 images, so this represents ~234K optimization steps.
-
-The MSE loss value as a function of epochs is shown in Figure 4. 
+I trained the model for 500 epochs with a batch size of 128. The MNIST training set has 60,000 images, so this represents ~234K optimization steps.
 
 ### 5.3 FID scores
 
-Using the 60,000 images from the MNIST training set as the reference distribution, the FID scores I obtained are shown in the table below. 
+Using the 60,000 images from the MNIST training set as the reference distribution, the FID scores I obtained with DDIM sampling are shown in the table below. 
 
 |  Steps   |   FID   |
 |----------|---------|
@@ -134,7 +137,7 @@ Using the 60,000 images from the MNIST training set as the reference distributio
 |      20  |  20.01  |
 |      50  |  19.46  |
 
-These are hardly decent results, but they were to be expected given the small size of the U-Net (only 4.9M parameters).
+These are hardly decent results, but this was expected given the small size of the U-Net (only 4.9M parameters). My goal was not to create a state-of-the-art model.
 
 ### 5.4 Visualizing generated images
 
@@ -194,7 +197,7 @@ Looking into Ho's code on GitHub, I could spot the following enhancements that a
 
 FID mismatches could also come from subtle numerical differences between GPU and TPU training (they used TPU), and from random generation differences due to different hardware and seeds. 
 
-In their paper, Ho et al. reported an FID value of 3.17. Using their sampling method, I got an FID of 6.43 with a first run, and 5.71 with a second run after changing the random generation seed. With this method, which is statistical, changing seeds or hardware (they used TPU, I used GPU) yields significantly different results. It is unknown if Ho et al. could reliably reproduce their 3.17 run.
+In their paper, Ho et al. reported an FID value of 3.17. Using their sampling method, I got an FID of 6.43 with a first run, and 5.71 with a second run after changing the random generation seed. With this method, which is statistical, changing seeds or hardware (they used TPU, I used GPU) yields significantly different results.
 
 I ran DDIM sampling with eta=1, making sampling statistical and approaching DDPM. Using 100 steps, I obtained an FID of 5.76. This is consistent with the DDPM sampling results.
 
@@ -210,22 +213,13 @@ The table below shows the runtimes on an A100 GPU to generate 50,000 CIFAR-10 im
 |   100   |       0:41:00          |
 |  1000   |       6:55:10          |
 
-### 6.4 Visualizing generated images
+### 6.5 Visualizing generated images
 
-Figure 7 shows examples of images obtained using the DDPM sampling method, which yields an FID of 4.40.
+Figure 7 shows examples of CIFAR-10 images obtained using the DDPM sampling method, which yields an FID of 4.40.
 
 ![](pictures/cifar10_ddpm_samples.png)
 
-Figure 8 shows images generated using the DDIM sampling method with 100 steps.
-
-Examples of generative "hallucinations" are shown on the last row of images:
-
-- A cat with a red mouse on top of its head
-- An entirely red dog lying on the ground
-- A pink cat
-- A deer with front legs shaped like horns
-
-The images were obtained using only 100 DDIM steps, which corresponds to an FID of 4.40.
+Figure 8 shows CIFAR-10 images generated using the DDIM sampling method with different numbers of steps.
 
 ![](pictures/cifar10_ddim_samples.png)
 
@@ -242,4 +236,4 @@ The FID results I obtained with DDIM sampling are very close to the results Song
 
 The FID results I got with DDPM sampling are significantly worse than the score Ho et al. reported in their paper. However, random generation clearly impacts results. With more trials, I may have been able to improve my results.
 
-This work shows that reproducing results from research papers is not always straightforward, sometimes even by the authors. But it was very rewarding to watch images emerging from pure noise!
+This work illustrates a well-known problem: reproducing results from research papers is not always straightforward (sometimes even by the authors). But it was very rewarding to watch images emerging from pure noise!
