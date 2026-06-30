@@ -4,7 +4,7 @@
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-from model_utils import load_diffusion_model
+from utils.model_utils import load_diffusion_model
 
 
 def display_ddpm_images(images, timesteps=None):
@@ -46,8 +46,7 @@ def display_ddim_images(images, rows, cols):
     if images.shape[0] != rows*cols:
         raise ValueError(f"Expecting {rows*cols} images, received {images.shape[0]}")
     
-    fig, axes = plt.subplots(rows, cols, figsize=(cols, rows))  # e.g. (6, 6)
-    # fig, axes = plt.subplots(rows, cols, figsize=(12, 12))
+    fig, axes = plt.subplots(rows, cols, figsize=(cols, rows))
     axes = np.atleast_2d(axes)
 
     n = 0
@@ -69,33 +68,30 @@ def sample_and_view_images(
     eta=0
 ):
     """
-    Samples diffusion model and displays generated images.
+    Samples diffusion model and displays the generated images.
     
     Arguments:
-        model_dir (str): Directory where the model files are (config, weights).
+        model_dir (str): Directory where the model files are (config, EMA weights).
         num_screens (str): Number of screens to display.
         method (str): Sampling method, either 'ddpm' or 'ddim'.
         num_steps (int): Number of DDIM steps.
         eta (float): DDIM eta parameter (0: deterministics, 1: DDPM-like).
 
     If method is:
-        'ddpm': Each screen shows 8 images at timesteps 999, 899 ... 99, 0.
+        'ddpm': Each screen shows 8 generated at timesteps 999, 899 ... 99, 0.
         'ddim': Each screen shows a grid of 12 x 12 images.
     """
 
     # Load diffusion model
-    print(f"Loading diffusion model from directory {model_dir}")
+    print(f">> Loading diffusion model from directory {model_dir}")
     model = load_diffusion_model(model_dir, ema_net_only=True)
-
-    # Generate images
-    print(f"\nGenerating {num_images} images using {method} sampling method")
 
     if method == "ddpm":
         # Generate 8 images per screen
         batch_size = 8
         num_images = num_screens * batch_size
 
-        print(f"Generating {num_images} using DDPM sampling")
+        print(f">> Generating {num_images} images using DDPM sampling")
         images = model.ddpm_sampling(num_images, keep_all_images=True)
 
         # Rescale generated images from [-1, 1] to [0, 1] for matplotlib
@@ -110,11 +106,10 @@ def sample_and_view_images(
         batch_size = 144
         num_images = num_screens * batch_size
 
-        print(f"Generating {num_images} using DDIM sampling with {num_steps} steps (eta={eta}")
+        print(f">> Generating {num_images} images using DDIM sampling ({num_steps} steps, eta={eta})")
         images = model.ddim_sampling(num_images, num_steps=num_steps, eta=eta)
 
         # Rescale generated images from [-1, 1] to [0, 1] for matplotlib
-        # images = (images.numpy() + 1) / 2.0
         images = (images.numpy() + 1) / 2.0
         images = np.clip(images, 0, 1)
 
@@ -134,23 +129,23 @@ if __name__ == "__main__":
     )    
     parser.add_argument(
         "--method",
-        help="Sampling method, either 'ddpm' or 'ddim'. Default: 'ddim'",
+        help="Sampling method, either 'ddpm' or 'ddim' (Default: 'ddim')",
         choices=["ddpm", "ddim"],
         type=str
     )
     parser.add_argument(
         "--num_screens",
-        help="Number of screens to display. Default: 10",
+        help="Number of screens to display (Default: 10)",
         type=int
     )
     parser.add_argument(
         "--num_steps",
-        help="Number of DDIM steps. Default: 50",
+        help="Number of DDIM steps (Default: 50)",
         type=int
     )
     parser.add_argument(
         "--eta",
-        help="DDIM eta parameter (0: deterministic, 1: DDPM-like). Default: 0",
+        help="DDIM eta parameter (Default: 0)",
         type=float
     )
 

@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from scipy import linalg
 
+
 def get_inception_activations(images, inception, batch_size=64):
     """
     Returns (N, 2048) pool3 features from Inception v3.

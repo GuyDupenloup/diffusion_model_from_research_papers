@@ -37,28 +37,40 @@ Then, I trained a model on CIFAR-10 using the same U-Net as in the DDPM paper. I
 The code for this project is in the **./src** directory and is organized as shown below.
 
 ```
-   src
-    |     
-    ├── u_net.py                   # U-Net model
-    |
-    ├── diffusion_model.py         # DDPM diffusion model (includes DDPM/DDIM sampling)
-    |
-    ├── train_mnist.py             # Train diffusion model on MNIST dataset
-    |
-    ├── train_cifar10.py           # Train diffusion model on CIFAR-10 dataset
-    |
-    ├── compute_mnist_fid.py       # Compute MNIST FID score
-    |
-    ├── compute_cifar10_fid.py     # Compute CIFAR-10 FID score
-    |
-    ├── view_gen_images.py         # Generate images and display them
-    |
-    ├── model_utils.py             # Model utilities (load models, save/reload training checkpoints)
-    |
-    └── fid_utils.py               # Shared FID calculation functions
+    src
+     |     
+     ├── models
+     |     ├── u_net.py                 # U-Net model
+     |     └── diffusion_models.py      # DDPM diffusion model (includes DDPM/DDIM sampling)
+     |
+     ├── utils
+     |     ├── model_utils.py            # Model utils (count parameters, load models)
+     |     ├── train_utils.py            # Save/reload checkpoint
+     |     └── fid_utils.py              # Share FID calculation functions
+     |
+     └── scripts
+           ├── train_mnist.py            # Train diffusion model on MNIST
+           ├── train_cifar10.py          # Train diffusion model on CIFAR-10
+           ├── compute_mnist_fid.py      # Compute FID of MNIST diffusion model
+           ├── compute_cifar10_fid.py    # Compute FID of CIFAR-10 diffusion model
+           └── view_gen_images.py        # Generate images and view them
 ```
 
-See file **requirements.txt** for the list of Python packages I used.
+### 2.2 Python search path
+
+To run the scripts, you need to add the **./src** directory path to the PYTHONPATH environment variable that sets the search path for Python, as shown below.
+
+### 2.3 Python packages
+
+The Python packages I used are listed in file **requirements.txt**.
+
+```bash
+# Linux
+export PYTHONPATH="/mypath/src:$PYTHONPATH"
+
+# Windows cmd
+set PYTHONPATH=%PYTHONPATH%;C:\mypath\src
+```
 
 ## 4. U-Net model architecture
 

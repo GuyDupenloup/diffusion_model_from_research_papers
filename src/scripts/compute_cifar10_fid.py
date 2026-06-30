@@ -8,8 +8,8 @@ import math
 import random
 import numpy as np
 import tensorflow as tf
-from model_utils import load_diffusion_model
-from fid_utils import get_inception_activations, compute_acts_fid
+from utils.model_utils import load_diffusion_model
+from utils.fid_utils import get_inception_activations, compute_acts_fid
 
 
 def compute_fid_score(model_dir, method, num_steps=None, eta=None, batch_size=None):

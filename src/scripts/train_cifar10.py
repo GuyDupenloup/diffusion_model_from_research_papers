@@ -7,8 +7,9 @@ from timeit import default_timer as timer
 from datetime import timedelta
 import numpy as np
 import tensorflow as tf
-from diffusion_model import DiffusionModel
-from utils import print_trainable_variables, SaveCheckpointCallback, load_checkpoint_weights
+from models.diffusion_model import DiffusionModel
+from utils.model_utils import print_trainable_variables
+from utils.train_utils import SaveCheckpointCallback, load_checkpoint_weights
 
 
 def create_data_loader(x, batch_size):
@@ -28,7 +29,7 @@ def create_data_loader(x, batch_size):
     return ds
 
 
-def train_model(output_dir, epochs, resume_dir=None, resume_epoch=0):
+def train_model(output_dir, epochs, resume_from=None):
 
     # Create the output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -66,16 +67,17 @@ def train_model(output_dir, epochs, resume_dir=None, resume_epoch=0):
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
 
-    if resume_dir:
-        print(f"Resuming training from directory {resume_dir}")
-        load_checkpoint_weights(resume_dir, model)
+    if resume_from:
+        checkpoint_epoch = int(os.path.basename(resume_from)[11:])
+        print(f">> Resuming training from epoch {checkpoint_epoch}")
+        load_checkpoint_weights(resume_from, model)
 
     # Set up callbacks
     callbacks = [
         SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
             period=50,
-            epoch_offset=resume_epoch
+            epoch_offset=checkpoint_epoch if resume_from else 0,
         ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv"),
@@ -118,16 +120,10 @@ if __name__ == "__main__":
         type=int
     )
     parser.add_argument(
-        "--resume_dir",
-        help="Directory to resume training from",
+        "--resume_from",
+        help="Checkpoint directory to resume training from",
         type=str
-    )
-    parser.add_argument(
-        "--resume_epoch",
-        help="Epoch number starting from the beginning of the training",
-        type=int,
-        default=0
     )
 
     args = parser.parse_args()
-    train_model(args.output_dir, args.epochs, args.resume_dir, args.epoch_offset)
+    train_model(args.output_dir, args.epochs, args.resume_from)

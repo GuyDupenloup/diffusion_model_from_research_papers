@@ -3,13 +3,13 @@
 
 import os
 import argparse
-import json
 from timeit import default_timer as timer
 from datetime import timedelta
 import numpy as np
 import tensorflow as tf
-from diffusion_model import DiffusionModel
-from utils import print_trainable_variables, SaveCheckpointCallback
+from models.diffusion_model import DiffusionModel
+from utils.model_utils import print_trainable_variables
+from utils.train_utils import SaveCheckpointCallback, load_checkpoint_weights
 
 
 def create_data_loader(x, batch_size):
