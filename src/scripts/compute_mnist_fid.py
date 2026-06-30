@@ -88,7 +88,7 @@ def compute_fid_score(
         img = img[:, 2:30, 2:30, :]
 
         if save_dir:
-            fn = os.path.join(save_dir, f"images_{i}.npy", img)
+            fn = os.path.join(save_dir, f"images_{i}.npy")
             print(f"Saving images to {fn}")
             np.save(fn, img.numpy())
 

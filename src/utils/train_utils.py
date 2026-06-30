@@ -39,7 +39,7 @@ class SaveCheckpointCallback(tf.keras.callbacks.Callback):
         if (epoch + 1) % self.period == 0:
 
             # Create checkpoint directory
-            epoch_dir = os.path.join(self.save_dir, f"epoch_{epoch+1+self.epoch_offset}")
+            epoch_dir = os.path.join(self.save_dir, f"checkpoint_{epoch+1+self.epoch_offset}")
             os.makedirs(epoch_dir, exist_ok=True)
 
             # Save U-net and EMA-net weights

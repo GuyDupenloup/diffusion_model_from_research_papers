@@ -41,12 +41,12 @@ The code for this project is in the **./src** directory and is organized as show
      |     
      ├── models
      |     ├── u_net.py                 # U-Net model
-     |     └── diffusion_models.py      # DDPM diffusion model (includes DDPM/DDIM sampling)
+     |     └── diffusion_model.py       # DDPM diffusion model (includes DDPM/DDIM sampling)
      |
      ├── utils
-     |     ├── model_utils.py            # Model utils (count parameters, load models)
+     |     ├── model_utils.py            # Model utilities (count parameters, load models)
      |     ├── train_utils.py            # Save/reload checkpoint
-     |     └── fid_utils.py              # Share FID calculation functions
+     |     └── fid_utils.py              # Shared FID calculation functions
      |
      └── scripts
            ├── train_mnist.py            # Train diffusion model on MNIST
@@ -60,10 +60,6 @@ The code for this project is in the **./src** directory and is organized as show
 
 To run the scripts, you need to add the **./src** directory path to the PYTHONPATH environment variable that sets the search path for Python, as shown below.
 
-### 2.3 Python packages
-
-The Python packages I used are listed in file **requirements.txt**.
-
 ```bash
 # Linux
 export PYTHONPATH="/mypath/src:$PYTHONPATH"
@@ -71,6 +67,10 @@ export PYTHONPATH="/mypath/src:$PYTHONPATH"
 # Windows cmd
 set PYTHONPATH=%PYTHONPATH%;C:\mypath\src
 ```
+
+### 2.3 Python packages
+
+The Python packages I used are listed in file **requirements.txt**.
 
 ## 4. U-Net model architecture
 

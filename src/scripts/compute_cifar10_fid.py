@@ -52,8 +52,7 @@ def compute_fid_score(
     model = load_diffusion_model(model_dir, ema_net_only=True)
 
     # Get the training set images
-    # (real_images, _), _ = tf.keras.datasets.cifar10.load_data()
-    real_images = np.load("/content/drive/MyDrive/cifar10/dataset/cifar10_x_train.npy")
+    (real_images, _), _ = tf.keras.datasets.cifar10.load_data()
 
     if num_images is not None:
         random.shuffle(real_images)
@@ -85,7 +84,7 @@ def compute_fid_score(
         img = img.numpy()
 
         if save_dir:
-            fn = os.path.join(save_dir, f"images_{i}.npy", img)
+            fn = os.path.join(save_dir, f"images_{i}.npy")
             print(f"Saving images to {fn}")
             np.save(fn, img.numpy())
 

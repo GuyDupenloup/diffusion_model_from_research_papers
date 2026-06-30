@@ -35,9 +35,7 @@ def train_model(output_dir, epochs, resume_from=None):
     os.makedirs(output_dir, exist_ok=True)
 
     # Load CIFAR-10 dataset
-    # (x_train, y_train), _ = tf.keras.datasets.cifar10.load_data()
-    x_train = np.load(os.path.join(output_dir, "dataset", "cifar10_x_train.npy"))
-    y_train = np.load(os.path.join(output_dir, "dataset", "cifar10_y_train.npy"))
+    (x_train, y_train), _ = tf.keras.datasets.cifar10.load_data()
 
     # Create data loader for training set images
     train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))

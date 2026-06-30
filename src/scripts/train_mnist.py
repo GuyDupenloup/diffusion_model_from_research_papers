@@ -5,7 +5,6 @@ import os
 import argparse
 from timeit import default_timer as timer
 from datetime import timedelta
-import numpy as np
 import tensorflow as tf
 from models.diffusion_model import DiffusionModel
 from utils.model_utils import print_trainable_variables
@@ -32,7 +31,7 @@ def create_data_loader(x, batch_size):
     return ds
 
 
-def train_model(output_dir, epochs):
+def train_model(output_dir, epochs, resume_from=None):
 
     # Create the output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -65,11 +64,20 @@ def train_model(output_dir, epochs):
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
     
+    if resume_from:
+        if not os.path.isdir(resume_from):
+            raise FileNotFoundError(f"Unable to find checkpoint directory {resume_from}")
+        chk_epoch = int(os.path.basename(resume_from)[11:])
+        print(f">> Loading checkpoint {resume_from}")
+        load_checkpoint_weights(resume_from, model)
+        print(f">> Resuming training at epoch {chk_epoch+1}")
+
     # Set up callbacks
     callbacks = [
         SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
-            period=50
+            period=50,
+            epoch_offset=chk_epoch if resume_from else 0,
         ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv"),
@@ -95,13 +103,11 @@ def train_model(output_dir, epochs):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter
-        )
+    parser = argparse.ArgumentParser()
         
     parser.add_argument(
         "--output_dir",
-        help="Directory where to save training output files (model config, trained weights)",
+        help="Directory where to save training output files",
         required=True,
         type=str
     )   
@@ -111,6 +117,11 @@ if __name__ == "__main__":
         required=True,
         type=int
     )
+    parser.add_argument(
+        "--resume_from",
+        help="Checkpoint directory to resume training from",
+        type=str
+    )
 
     args = parser.parse_args()
-    train_model(args.output_dir, args.epochs)
+    train_model(args.output_dir, args.epochs, args.resume_from)
