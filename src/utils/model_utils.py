@@ -5,7 +5,7 @@ import os
 import json
 from tabulate import tabulate
 import numpy as np
-from diffusion_model import DiffusionModel
+from models.diffusion_model import DiffusionModel
 
 
 def print_trainable_variables(model, params_only=False):

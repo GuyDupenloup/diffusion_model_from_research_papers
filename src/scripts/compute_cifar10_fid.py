@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Guy Dupenloup
 # Licensed under the MIT License. See LICENSE file for details.
 
+import os
 import argparse
 import time
 from datetime import timedelta
@@ -12,7 +13,14 @@ from utils.model_utils import load_diffusion_model
 from utils.fid_utils import get_inception_activations, compute_acts_fid
 
 
-def compute_fid_score(model_dir, method, num_steps=None, eta=None, batch_size=None):
+def compute_fid_score(
+    model_dir,
+    method="ddim",
+    num_steps=50,
+    eta=0,
+    batch_size=2000,
+    save_dir=None
+):
     """
     Generates images with the diffusion model and computes the FID score.
  
@@ -32,13 +40,15 @@ def compute_fid_score(model_dir, method, num_steps=None, eta=None, batch_size=No
             DDPM-like if eta=1.
          batch_size (int):
             Sampling batch size (number of images generated per sampling).
+        save_dir (int):
+            Directory where to save batches of generated images to numpy arrays.
 
     Returns:
         FID score as a Python float. Lower is better.
     """
 
     # Load the model
-    print(f"Loading diffusion model from directory {model_dir}")
+    print(f">> Loading diffusion model from directory {model_dir}")
     model = load_diffusion_model(model_dir, ema_net_only=True)
 
     # Get the training set images
@@ -52,9 +62,13 @@ def compute_fid_score(model_dir, method, num_steps=None, eta=None, batch_size=No
     num_images = real_images.shape[0]
 
     if method == "ddpm":
-        print(f"\nGenerating {num_images} images using DDPM sampling")
+        print(f">> Generating {num_images} images using DDPM sampling")
     else:
-        print(f"\nGenerating {num_images} images using DDIM sampling with {num_steps} steps")
+        print(f">> Generating {num_images} images using DDIM sampling with {num_steps} steps")
+
+    # Create directory where to save images
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
 
     num_batches = math.ceil(num_images / batch_size)
     gen_images = []
@@ -68,12 +82,18 @@ def compute_fid_score(model_dir, method, num_steps=None, eta=None, batch_size=No
             img = model.ddpm_sampling(current_batch_size)
         else:
             img = model.ddim_sampling(current_batch_size, num_steps=num_steps, eta=eta)
-        gen_images.append(img.numpy())
+        img = img.numpy()
 
+        if save_dir:
+            fn = os.path.join(save_dir, f"images_{i}.npy", img)
+            print(f"Saving images to {fn}")
+            np.save(fn, img.numpy())
+
+        gen_images.append(img)
 
     # Get a single numpy array with shape (num_images, H, W, C)
     gen_images = np.concatenate(gen_images, axis=0)
-
+    
     elapsed = time.time() - start_time
     print(f"Generation time: {str(timedelta(seconds=int(elapsed)))}")
 
@@ -86,12 +106,11 @@ def compute_fid_score(model_dir, method, num_steps=None, eta=None, batch_size=No
         include_top=False, pooling="avg", input_shape=(299, 299, 3)
     )
 
-    print("\nExtracting activations for real images")
+    print(">> Extracting activations for real and generated images")
     real_acts = get_inception_activations(real_images, inception)
-
-    print("Extracting activations for generated images")
     gen_acts = get_inception_activations(gen_images, inception)
 
+    print(">> Computing FID")
     fid_score = compute_acts_fid(real_acts, gen_acts)
 
     print(f"\n\nFID score: {fid_score:.2f}")
@@ -112,35 +131,38 @@ if __name__ == "__main__":
     )   
     parser.add_argument(
         "--method",
-        help="Sampling method, either 'ddpm' or 'ddim'",
+        help="Sampling method, either 'ddpm' or 'ddim' (Default: 'ddim')",
         choices=["ddpm", "ddim"],
-        type=str,
-        default="ddim"
+        type=str
     )
     parser.add_argument(
         "--num_steps",
-        help="DDIM number of sampling steps",
-        type=int,
-        default=100
+        help="DDIM number of sampling steps (Default: 50)",
+        type=int
     )
     parser.add_argument(
         "--eta",
-        help="DDIM eta parameter (deterministic if eta=0, DDPM-like if eta=1)",
+        help="DDIM eta parameter (Default: 0)",
         type=float,
         default=0
     )
     parser.add_argument(
         "--batch_size",
-        help="Size of sampling batches",
-        type=int,
-        default=2000
+        help="Size of sampling batches (Default: 2000)",
+        type=int
+    )
+    parser.add_argument(
+        "--save_dir",
+        help="Directory where to save images as they get created",
+        type=str
     )
     args = parser.parse_args()
 
-    compute_fid_score(
+    _ = compute_fid_score(
         model_dir=args.model_dir,
         method=args.method,
         num_steps=args.num_steps,
         eta=args.eta,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        save_dir=args.save_dir
     )

@@ -2,11 +2,10 @@
 # Licensed under the MIT License. See LICENSE file for details.
 
 import os
-import math
 import json
 import numpy as np
 import tensorflow as tf
-from u_net import UNet
+from models.u_net import UNet
 
 
 class DiffusionModel(tf.keras.models.Model):

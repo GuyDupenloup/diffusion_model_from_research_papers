@@ -68,16 +68,19 @@ def train_model(output_dir, epochs, resume_from=None):
     )
 
     if resume_from:
-        checkpoint_epoch = int(os.path.basename(resume_from)[11:])
-        print(f">> Resuming training from epoch {checkpoint_epoch}")
+        if not os.path.isdir(resume_from):
+            raise FileNotFoundError(f"Unable to find checkpoint directory {resume_from}")
+        print(f">> Loading checkpoint {resume_from}")
         load_checkpoint_weights(resume_from, model)
+        chk_epoch = int(os.path.basename(resume_from)[11:])
+        print(f">> Resuming training at epoch {chk_epoch+1}")
 
     # Set up callbacks
     callbacks = [
         SaveCheckpointCallback(
             os.path.join(output_dir, "checkpoints"),
             period=50,
-            epoch_offset=checkpoint_epoch if resume_from else 0,
+            epoch_offset=chk_epoch if resume_from else 0,
         ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv"),
@@ -103,13 +106,11 @@ def train_model(output_dir, epochs, resume_from=None):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter
-        )
+    parser = argparse.ArgumentParser()
         
     parser.add_argument(
         "--output_dir",
-        help="Directory where to save training output files (model config, trained weights)",
+        help="Directory where to save training output files",
         required=True,
         type=str
     )   
