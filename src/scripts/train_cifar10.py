@@ -29,7 +29,39 @@ def create_data_loader(x, batch_size):
     return ds
 
 
-def train_model(output_dir, epochs, resume_from=None):
+def train_model(
+    output_dir,
+    epochs,
+    save_period,
+    resume_from=None
+):
+    """
+    Trains a model, saving checkpoints at regular intervals
+    as the training progresses.
+    If interrupted, training can be resumed from a saved checkpoint
+    (model and optimizer weights are restored).
+
+    Arguments:
+        output_dir (str): Root directory under which all the directories 
+                          and files created during the training are saved.
+        epochs (int): Number of training epochs.
+        save_period (int): Checkpoint saving period in epochs. If set to 0,
+                           no checkpoints are saved.
+        resume_from (str): Checkpoint directory to resume the training from
+                           (instead of training from scratch)
+    
+    Output directory structure:
+    --------------------------
+        `output_dir`
+              ├── checkpoints
+              |       ├── checkpoint_0
+              |       |       └── u_net.weights.h5, ema_net.weights.h5, optimizer_weights.npz
+              |       └── checkpoint_1
+              |               └── u_net.weights.h5, ema_net.weights.h5, optimizer_weights.npz
+              ├── trained_model
+              |       └── model_config.json, u_net.weights.h5, ema_net.weights.h5
+              └── metrics.csv
+    """
 
     # Create the output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -59,35 +91,40 @@ def train_model(output_dir, epochs, resume_from=None):
     })
 
     print_trainable_variables(model, params_only=True)
-    
-    # The model handles loss function and metrics.
+
+    # The model takes care of the loss function.
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=2e-4)
     )
-
+    
+    # Load checkpoint if resuming a training
     if resume_from:
-        if not os.path.isdir(resume_from):
-            raise FileNotFoundError(f"Unable to find checkpoint directory {resume_from}")
+        chk_epoch = int(os.path.basename(resume_from)[11:])
         print(f">> Loading checkpoint {resume_from}")
         load_checkpoint_weights(resume_from, model)
-        chk_epoch = int(os.path.basename(resume_from)[11:])
-        print(f">> Resuming training at epoch {chk_epoch+1}")
 
     # Set up callbacks
     callbacks = [
-        SaveCheckpointCallback(
-            os.path.join(output_dir, "checkpoints"),
-            period=50,
-            epoch_offset=chk_epoch if resume_from else 0,
-        ),
         tf.keras.callbacks.CSVLogger(
             filename=os.path.join(output_dir, "metrics.csv"),
             append=True
         )
     ]
+    if save_period > 0:
+        callbacks.append(
+            SaveCheckpointCallback(
+                os.path.join(output_dir, "checkpoints"),
+                period=save_period,
+                epoch_offset=chk_epoch if resume_from else 0,
+            )
+        )
 
     # Train model
-    print(">> Starting training")
+    if not resume_from:
+      print(">> Starting training")
+    else:
+      print(f">> Resuming training at epoch {chk_epoch+1}")
+
     start_time = timer()
     model.fit(
         train_ds,
@@ -98,14 +135,15 @@ def train_model(output_dir, epochs, resume_from=None):
     train_run_time = int(end_time - start_time)
     print(">> Training runtime: " + str(timedelta(seconds=train_run_time))) 
 
-    # Save the config file and the two models (U-Net and EMA)
-    model.save(os.path.join(output_dir, "trained_model"))
+    # Save model config file, and U-Net and EMA weights
+    dirpath = os.path.join(output_dir, "trained_model")
+    print(f">> Saving trained model in directory {dirpath}")
+    model.save(dirpath)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-        
     parser.add_argument(
         "--output_dir",
         help="Directory where to save training output files",
@@ -119,10 +157,21 @@ if __name__ == "__main__":
         type=int
     )
     parser.add_argument(
+        "--save_period",
+        help="Checkpoint saving period in epochs",
+        required=True,
+        type=int
+    )
+    parser.add_argument(
         "--resume_from",
         help="Checkpoint directory to resume training from",
         type=str
     )
-
     args = parser.parse_args()
-    train_model(args.output_dir, args.epochs, args.resume_from)
+    
+    train_model(
+       args.output_dir,
+       args.epochs,
+       args.save_period,
+       resume_from=args.resume_from
+    )

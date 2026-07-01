@@ -32,7 +32,9 @@ I first used the MNIST dataset with a light-weight U-Net as a "pipe-cleaner". Th
 Then, I trained a model on CIFAR-10 using the same U-Net as in the DDPM paper. I did not attempt to train models on the LSUN or CelebA-HD datasets due to GPU hardware constraints.
 
 
-## 3. Source code and Python packages
+## 3. Project setup
+
+### 3.1 Source code
 
 The code for this project is in the **./src** directory and is organized as shown below.
 
@@ -56,7 +58,7 @@ The code for this project is in the **./src** directory and is organized as show
            └── view_gen_images.py        # Generate images and view them
 ```
 
-### 2.2 Python search path
+### 3.2 Python search path
 
 To run the scripts, you need to add the **./src** directory path to the PYTHONPATH environment variable that sets the search path for Python, as shown below.
 
@@ -68,7 +70,7 @@ export PYTHONPATH="/mypath/src:$PYTHONPATH"
 set PYTHONPATH=%PYTHONPATH%;C:\mypath\src
 ```
 
-### 2.3 Python packages
+### 3.3 Python packages
 
 The Python packages I used are listed in file **requirements.txt**.
 
@@ -137,7 +139,7 @@ I used the training setup described in Appendix B "Experimental details" of the 
 - Optimizer: Adam with learning rate 2e-4
 - Batch size: 128
 
-I trained the model for 500 epochs with a batch size of 128. The MNIST training set has 60,000 images, so this represents ~234K optimization steps.
+I trained the model for 500 epochs. The MNIST training set has 60,000 images, so this represents ~234K optimization steps.
 
 ### 5.3 FID scores
 
@@ -145,9 +147,9 @@ Using the 60,000 images from the MNIST training set as the reference distributio
 
 |  Steps   |   FID   |
 |----------|---------|
-|      10  |  22.15  |
-|      20  |  20.01  |
-|      50  |  19.46  |
+|      10  |  22.1   |
+|      20  |  20.0   |
+|      50  |  19.5   |
 
 These are hardly decent results, but this was expected given the small size of the U-Net (only 4.9M parameters). My goal was not to create a state-of-the-art model.
 
@@ -157,11 +159,9 @@ Examples of MNIST images generated using the DDPM sampling method are shown in F
 
 ![](pictures/mnist_ddpm_samples.png)
 
-Examples of images obtained using DDIM sampling with 50 steps are shown in Figure 5.
+Figure 4 shows 192 examples of images obtained using DDIM sampling with 50 steps. Although the FID score is 19.5, images are crisp enough and only a handful of digits cannot be identified with reasonable confidence.
 
 ![](pictures/mnist_ddim_samples.png)
-
-Low-quality images are shown on the last row, where it is impossible to identify the digits with reasonable confidence.
 
 
 ## 6. CIFAR-10 diffusion model
@@ -227,14 +227,17 @@ The table below shows the runtimes on an A100 GPU to generate 50,000 CIFAR-10 im
 
 ### 6.5 Visualizing generated images
 
-Figure 7 shows examples of CIFAR-10 images obtained using the DDPM sampling method, which yields an FID of 4.40.
+Examples of CIFAR-10 images generated using the DDPM sampling method are shown in Figure 7. The images are shown at different timesteps of the reverse process.
 
 ![](pictures/cifar10_ddpm_samples.png)
 
-Figure 8 shows CIFAR-10 images generated using the DDIM sampling method with different numbers of steps.
+Figure 8 shows CIFAR-10 images generated using the DDIM sampling method with different numbers of steps. It is hard to discern any difference in quality between the images generated with 100 steps and 50 steps. But when using only 10 steps, the images are not crisp anymore and have lost much of their contrast.
 
 ![](pictures/cifar10_ddim_samples.png)
 
+Figure 9 shows 128 examples of images obtained using DDIM sampling with 50 steps. The quality of the images is quite good, and there is object or animal that cannot be easily identified.
+
+![](pictures/cifar10_ddim_50step_samples.png)
 
 ## 7. Conclusion
 

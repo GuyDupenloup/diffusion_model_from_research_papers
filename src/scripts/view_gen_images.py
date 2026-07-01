@@ -62,7 +62,7 @@ def display_ddim_images(images, rows, cols):
 
 def sample_and_view_images(
     model_dir,
-    method="ddim",
+    method,
     num_screens=10,
     num_steps=50,
     eta=0
@@ -87,40 +87,41 @@ def sample_and_view_images(
     model = load_diffusion_model(model_dir, ema_net_only=True)
 
     if method == "ddpm":
-        # Generate 8 images per screen
+        # Generate 8 images per screen (8 x timesteps)
         batch_size = 8
         num_images = num_screens * batch_size
 
         print(f">> Generating {num_images} images using DDPM sampling")
-        images = model.ddpm_sampling(num_images, keep_all_images=True)
+        images = model.ddpm_sampling(num_images, keep_all_images=True).numpy()
 
         # Rescale generated images from [-1, 1] to [0, 1] for matplotlib
-        images = (images.numpy() + 1) / 2.0
+        images = (images + 1) / 2.0
         images = np.clip(images, 0, 1)
 
         for i in range(0, len(images), batch_size):
             display_ddpm_images(images[i:i+batch_size])
 
     if method == "ddim":
-        # Generate 144 images per screen
-        batch_size = 144
+        # Generate 8x16 images per screen
+        rows = 8
+        cols = 16
+        batch_size = rows * cols
         num_images = num_screens * batch_size
 
         print(f">> Generating {num_images} images using DDIM sampling ({num_steps} steps, eta={eta})")
-        images = model.ddim_sampling(num_images, num_steps=num_steps, eta=eta)
-
+        images = model.ddim_sampling(num_images, num_steps=num_steps, eta=eta).numpy()
+        
         # Rescale generated images from [-1, 1] to [0, 1] for matplotlib
-        images = (images.numpy() + 1) / 2.0
+        images = (images + 1) / 2.0
         images = np.clip(images, 0, 1)
 
         for i in range(0, len(images), batch_size):
-            display_ddim_images(images[i:i+batch_size], rows=12, cols=12)
+            display_ddim_images(images[i:i+batch_size], rows=rows, cols=cols)
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-
     parser.add_argument(
         "--model_dir",
         help="Directory where the diffusion model files are (model config, EMA weights)",
@@ -130,30 +131,33 @@ if __name__ == "__main__":
     parser.add_argument(
         "--method",
         help="Sampling method, either 'ddpm' or 'ddim' (Default: 'ddim')",
+        required=True,
         choices=["ddpm", "ddim"],
         type=str
     )
     parser.add_argument(
         "--num_screens",
         help="Number of screens to display (Default: 10)",
-        type=int
+        type=int,
+        default=10
     )
     parser.add_argument(
         "--num_steps",
         help="Number of DDIM steps (Default: 50)",
-        type=int
+        type=int,
+        default=50
     )
     parser.add_argument(
         "--eta",
         help="DDIM eta parameter (Default: 0)",
-        type=float
+        type=float,
+        default=0
     )
-
     args = parser.parse_args()
 
     sample_and_view_images(
         args.model_dir,
-        method=args.method,
+        args.method,
         num_screens=args.num_screens,
         num_steps=args.num_steps,
         eta=args.eta

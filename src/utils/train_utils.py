@@ -26,11 +26,12 @@ class SaveCheckpointCallback(tf.keras.callbacks.Callback):
             resuming training from a previous checkpoint.
     """
 
-    def __init__(self, save_dir, period=1, epoch_offset=0):
+    def __init__(self, save_dir, period=1, epoch_offset=0, verbose=False):
         super().__init__()
         self.save_dir = save_dir
         self.period = period
         self.epoch_offset = epoch_offset
+        self.verbose = verbose
 
         # Create checkpoints root directory if it does not exist
         os.makedirs(save_dir, exist_ok=True)
@@ -49,8 +50,8 @@ class SaveCheckpointCallback(tf.keras.callbacks.Callback):
             # Save optimizer weights
             opt_weights = [var.numpy() for var in self.model.optimizer.variables]
             np.savez(os.path.join(epoch_dir, "optimizer_weights.npz"), *opt_weights)
- 
-            print(f"\nsaved checkpoint to directory {epoch_dir}")
+            if self.verbose:
+                print(f"\nsaved checkpoint to directory {epoch_dir}")
 
 
 def load_checkpoint_weights(dirpath, model):

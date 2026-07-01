@@ -15,10 +15,11 @@ from utils.fid_utils import get_inception_activations, compute_acts_fid
 
 def compute_fid_score(
     model_dir,
-    method="ddim",
-    num_steps=50,
-    eta=0,
-    batch_size=2000,
+    method,
+    num_images=None,
+    num_steps=None,
+    eta=None,
+    batch_size=None,
     save_dir=None
 ):
     """
@@ -31,6 +32,9 @@ def compute_fid_score(
     Arguments:
         model_dir (str):
             Directory where the model files are (config, EMA weights).
+        num_images (int):
+            Number of images to use. Defaults to 60,000, which is the size
+            of the MNIST training set.
         method (str):
             Sampling method, either 'ddpm' or 'ddim'.
         num_steps (int):
@@ -44,7 +48,7 @@ def compute_fid_score(
             Directory where to save batches of generated images to numpy arrays.
 
     Returns:
-        FID score as a Python float. Lower is better.
+        FID score as a Python float.
     """
 
     # Load the model
@@ -57,8 +61,8 @@ def compute_fid_score(
     if num_images is not None:
         random.shuffle(real_images)
         real_images = real_images[:num_images]
-
-    num_images = real_images.shape[0]
+    else:
+        num_images = real_images.shape[0]
 
     if method == "ddpm":
         print(f">> Generating {num_images} images using DDPM sampling")
@@ -78,15 +82,14 @@ def compute_fid_score(
 
         current_batch_size = min(batch_size, num_images - i*batch_size)
         if method == "ddpm":
-            img = model.ddpm_sampling(current_batch_size)
+            img = model.ddpm_sampling(current_batch_size).numpy()
         else:
-            img = model.ddim_sampling(current_batch_size, num_steps=num_steps, eta=eta)
-        img = img.numpy()
+            img = model.ddim_sampling(current_batch_size, num_steps=num_steps, eta=eta).numpy()
 
         if save_dir:
             fn = os.path.join(save_dir, f"images_{i}.npy")
             print(f"Saving images to {fn}")
-            np.save(fn, img.numpy())
+            np.save(fn, img)
 
         gen_images.append(img)
 
@@ -121,7 +124,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )  
+    )
     parser.add_argument(
         "--model_dir",
         help="Directory where the model files are (config, EMA weights)",
@@ -132,12 +135,20 @@ if __name__ == "__main__":
         "--method",
         help="Sampling method, either 'ddpm' or 'ddim' (Default: 'ddim')",
         choices=["ddpm", "ddim"],
+        required=True,
         type=str
+    )
+    parser.add_argument(
+        "--num_images",
+        help="Number of images to use (Default: 50000)",
+        type=int,
+        default=50000
     )
     parser.add_argument(
         "--num_steps",
         help="DDIM number of sampling steps (Default: 50)",
-        type=int
+        type=int,
+        default=50
     )
     parser.add_argument(
         "--eta",
@@ -148,7 +159,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--batch_size",
         help="Size of sampling batches (Default: 2000)",
-        type=int
+        type=int,
+        default=2000
     )
     parser.add_argument(
         "--save_dir",
@@ -158,8 +170,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     _ = compute_fid_score(
-        model_dir=args.model_dir,
-        method=args.method,
+        args.model_dir,
+        args.method,
+        num_images=args.num_images,
         num_steps=args.num_steps,
         eta=args.eta,
         batch_size=args.batch_size,
